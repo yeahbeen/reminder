@@ -85,41 +85,14 @@ class Schedule(QWidget):
         diff = 86400000 + QTime.currentTime().msecsTo(QTime(0,0,1))
         print(diff)
         QTimer.singleShot(diff,self.start) #0点的时候重置一下计时器
-        # today = QDateTime.currentDateTime().toString("yyyy-MM-dd")
-        # print("today:"+today)
-        # firststart = False
-        # if "starttime" not in Config.config.keys() or Config.config["starttime"] != today:
-            # firststart = True
-            # Config.config["starttime"] = today
-        # print("firststart:"+str(firststart))
         self.schedule_timer = []
         for row in range(len(Config.config["schedule"])):      
             s = Config.config["schedule"][row]
             print(str(s))
             if s[3] == "禁用" or s[3] == "已过期":
                 continue
-            # if firststart:
-                # s[3] = "启用"
-                # self.table.setItem(row,3,QTableWidgetItem("启用"))
             dt = QDateTime.fromString(s[1],"hh:mm M/dd/yyyy")
             print("dt "+str(dt))
-            '''
-            if s[5] == "":
-                dif = 0
-            else:
-                lasttime = QDateTime.fromString(s[5],"yyyy-MM-dd hh:mm:ss")
-                print(lasttime)
-                dif = lasttime.secsTo(QDateTime.currentDateTime())
-                print(dif)
-            if s[2] == "每天":
-                circle = 86400
-            elif s[2] == "每周":
-                circle = 604800
-            elif s[2] == "每月":
-                circle = 2592000
-            if dif > circle:
-                QMessageBox.information(None,"以下日程已过期","时间:"+s[1]+"\n"+"重复:"+s[2]+"\n"+"动作:"+s[0]+"\n"+"内容:"+s[4])
-            '''
             #过期提醒
             if s[5] == "":  #为空表示是新增的，只提醒“仅一次”的，其他的不提醒
                 if s[2] == "仅一次":
@@ -176,19 +149,6 @@ class Schedule(QWidget):
                     timer.timeout.connect(self.schedule_ontimer)
                     timer.start(diff)   
             
-            # if s[2] == "仅一次" or s[2] == "每天":
-                # diff = QTime.currentTime().msecsTo(dt.time())
-                # print(diff)
-                # print("diff "+str(diff))
-                # if diff < 0:
-                    # if s[3] == "启用" and firststart:
-                        # QMessageBox.information(None,"以下日程已过期","时间:"+s[1]+"\n"+"重复:"+s[2]+"\n"+"动作:"+s[0]+"\n"+"内容:"+s[4])
-                # else:
-                    # timer = mytimer.mytimer(s)
-                    # self.schedule_timer.append(timer)
-                    # timer.setSingleShot(True)
-                    # timer.timeout.connect(self.schedule_ontimer)
-                    # timer.start(diff)   
         self.startbtn.setDisabled(True) 
         self.stopbtn.setDisabled(False) 
 
@@ -220,22 +180,9 @@ class Schedule(QWidget):
             if s[2] == "仅一次":
                 self.table.setItem(row,3,QTableWidgetItem("已过期"))
                 Config.config["schedule"][row][3] = "已过期"
-            # else:
-                # self.table.setItem(row,3,QTableWidgetItem("已执行"))
-                # Config.config["schedule"][row][3] = "已执行" 
             Config.config["schedule"][row][5] = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
         Config.save()
 
-        # if s[2] == "仅一次":
-            # itemlist = self.table.findItems(s[1],Qt.MatchExactly)
-            # for i in itemlist:
-                # row = self.table.row(i)
-                # self.table.setItem(row,3,QTableWidgetItem("已过期"))
-                # Config.config["schedule"][row][3] = "已过期"
-        # elif s[2] == "每天":
-            # timer.setSingleShot(False)
-            # timer.start(86400000)  
-            # timer.start(10000)  
 
 class Add(QWidget):
     def __init__(self,par,editting = False):
@@ -364,11 +311,6 @@ class Add(QWidget):
         table.setItem(row,4,QTableWidgetItem(content))
         table.verticalScrollBar().setValue(table.verticalScrollBar().maximum())
         if self.editting:
-            # Config.config["schedule"][row][0] = action
-            # Config.config["schedule"][row][1] = time
-            # Config.config["schedule"][row][2] = repeat
-            # Config.config["schedule"][row][3] = status
-            # Config.config["schedule"][row][4] = content
             Config.config["schedule"][row] = [action,time,repeat,status,content,Config.config["schedule"][row][5]]
         else:
             # table.setItem(row,3,QTableWidgetItem("启用"))
@@ -377,34 +319,6 @@ class Add(QWidget):
         
     def cansel(self):
         self.hide()
-    '''
-    def edit(self):
-        print("in edit")
-        print(self.sender())
-        items = self.table.selectedItems()
-        print(str(items))
-        if len(items) == 0:
-            return
-        row = self.table.row(items[0])
-        action = self.action_combo.currentText()
-        # time = self.hour_combo.currentText()+"时"+self.min_combo.currentText()+"分"
-        time = self.dt_edit.dateTime().toString("hh:mm M/dd/yyyy")
-        repeat = self.repeat_combo.currentText()
-        content = ""
-        if action == "提醒":
-            content = self.msg_edit.text()
-        elif action == "执行程序":
-            content = self.exe_edit.text()
-        self.table.setItem(row,0,QTableWidgetItem(action))
-        self.table.setItem(row,1,QTableWidgetItem(time))
-        self.table.setItem(row,2,QTableWidgetItem(repeat))
-        self.table.setItem(row,4,QTableWidgetItem(content))
-        Config.config["schedule"][row][0] = action
-        Config.config["schedule"][row][1] = time
-        Config.config["schedule"][row][2] = repeat
-        Config.config["schedule"][row][4] = content
-     '''
-
 
     def change_action(self):
         print("in change_action")

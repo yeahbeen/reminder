@@ -48,6 +48,8 @@ class Config(object):
             Config.config["long"]["restset"]["insound"] = True
             Config.config["long"]["restset"]["insoundpath"] = Config.workdir + "\\sound\\relax.mp3"
             Config.config["long"]["restset"]["insoundvol"] = 50
+            Config.config["set"]["fullscreen"] = True
+            Config.config["set"]["afterfullscreen"] = True
             Config.config["schedule"] = []
 
     @classmethod

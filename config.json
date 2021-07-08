@@ -9,12 +9,12 @@
         "conSec": "0",
         "restset": {
             "ui": "pop",
-            "uipic": "C:\\Users\\y\\Desktop\\relax\\picture",
+            "uipic": "D:/Work/Git/reminder/picture",
             "beforesound": true,
-            "beforesoundpath": "C:\\Users\\y\\Desktop\\relax\\sound\\gling.mp3",
+            "beforesoundpath": "D:/Work/Git/reminder/sound/gling.mp3",
             "beforesoundvol": 50,
             "insound": true,
-            "insoundpath": "C:\\Users\\y\\Desktop\\relax\\sound\\relax.mp3",
+            "insoundpath": "D:/Work/Git/reminder/sound/relax.mp3",
             "insoundvol": 50
         }
     },
@@ -28,12 +28,12 @@
         "conSec": "0",
         "restset": {
             "ui": "roll",
-            "uipic": "C:\\Users\\y\\Desktop\\relax\\picture",
+            "uipic": "D:/Work/Git/reminder/picture",
             "beforesound": true,
-            "beforesoundpath": "C:\\Users\\y\\Desktop\\relax\\sound\\gong.mp3",
+            "beforesoundpath": "D:/Work/Git/reminder/sound/gong.mp3",
             "beforesoundvol": 50,
             "insound": true,
-            "insoundpath": "C:/Users/y/Desktop/relax/sound/eye.mp3",
+            "insoundpath": "D:/Work/Git/reminder/sound/eye.mp3",
             "insoundvol": 50
         }
     },
@@ -44,7 +44,7 @@
             "\u6bcf\u5929",
             "\u542f\u7528",
             "\u8be5\u70b9\u996d\u4e86\uff01\uff01",
-            "2021-06-30 11:20:00"
+            "2021-07-08 11:20:00"
         ],
         [
             "\u63d0\u9192",
@@ -52,7 +52,7 @@
             "\u6bcf\u5929",
             "\u542f\u7528",
             "\u9e3f\u56fe\u7b7e\u5230",
-            "2021-06-30 11:40:00"
+            "2021-07-08 11:40:00"
         ],
         [
             "\u63d0\u9192",
@@ -60,7 +60,7 @@
             "\u6bcf\u5929",
             "\u542f\u7528",
             "\u8be5\u4f11\u606f\u4e86\uff01\uff01",
-            "2021-06-30 13:19:59"
+            "2021-07-08 13:20:00"
         ],
         [
             "\u63d0\u9192",
@@ -68,7 +68,7 @@
             "\u6bcf\u5929",
             "\u542f\u7528",
             "\u8be5\u5de5\u4f5c\u4e86\uff01\uff01",
-            "2021-06-30 14:59:59"
+            "2021-07-08 15:00:00"
         ],
         [
             "\u63d0\u9192",
@@ -84,8 +84,12 @@
             "\u6bcf\u5929",
             "\u542f\u7528",
             "",
-            "2021-06-30 02:00:00"
+            "2021-07-08 02:00:00"
         ]
     ],
-    "starttime": "2021-06-21"
+    "starttime": "2021-06-21",
+    "set": {
+        "fullscreen": true,
+        "afterfullscreen": true
+    }
 }
