@@ -82,11 +82,13 @@ class Schedule(QWidget):
 
     def start(self):
         print("in start")
+        QApplication.setQuitOnLastWindowClosed(False) #防止主程序最小化时，关闭弹框会导致程序退出
         diff = 86400000 + QTime.currentTime().msecsTo(QTime(0,0,1))
         print(diff)
         QTimer.singleShot(diff,self.start) #0点的时候重置一下计时器
+        self.msgbox = []   #所有弹框存起来，否则会被顶掉
         self.schedule_timer = []
-        for row in range(len(Config.config["schedule"])):      
+        for row in range(len(Config.config["schedule"])):
             s = Config.config["schedule"][row]
             print(str(s))
             if s[3] == "禁用" or s[3] == "已过期":
@@ -99,7 +101,7 @@ class Schedule(QWidget):
                     nexttime = dt
                 else:
                     nexttime = dt.addYears(100)  
-            else:
+            else: #找出下一次应该执行的时间
                 lasttime = QDateTime.fromString(s[5],"yyyy-MM-dd hh:mm:ss")
                 print(lasttime)
                 if s[2] == "每天":
@@ -111,8 +113,13 @@ class Schedule(QWidget):
                 elif s[2] == "仅一次":
                     nexttime = lasttime.addYears(100)
                 print(nexttime)
-            if QDateTime.currentDateTime() > nexttime:
-                QMessageBox.information(None,"以下日程已过期","内容:"+s[0]+" "+s[4]+"\n"+"时间:"+s[1]+"\n"+"重复:"+s[2])
+            if QDateTime.currentDateTime() > nexttime and s[0] != "关机": #当前时间大于下一次的时间则表明已过期;关机不提醒
+                msg = QMessageBox(QMessageBox.Information,"以下日程已过期","内容:"+s[0]+" "+s[4]+"\n"+"时间:"+s[1]+"\n"+"重复:"+s[2])
+                msg.setWindowFlags(msg.windowFlags()|Qt.WindowStaysOnTopHint)
+                msg.open()
+                self.msgbox.append(msg)
+                # QMessageBox.information(None,"以下日程已过期","内容:"+s[0]+" "+s[4]+"\n"+"时间:"+s[1]+"\n"+"重复:"+s[2])
+                #更新提醒时间
                 while QDateTime.currentDateTime() > nexttime:  #防止时间比较长，一直提示，找出最近的一次
                     nexttime0 = nexttime
                     if s[2] == "每天":
@@ -125,7 +132,7 @@ class Schedule(QWidget):
                         nexttime = nexttime0.addYears(100)
                     print(nexttime)
                 s[5] = nexttime0.toString("yyyy-MM-dd hh:mm:ss")
-            # if s[2] == "每周" or s[2] == "每月":
+            #启动计时器
             flag = False
             if s[2] == "每周":
                 date1 = dt.toString("ddd")
@@ -163,10 +170,10 @@ class Schedule(QWidget):
         s = timer.args
         print("执行事件:"+str(s))
         if s[0] == "提醒":
-            QApplication.setQuitOnLastWindowClosed(False)
-            self.msg = QMessageBox(QMessageBox.Information,"提醒",s[4])
-            self.msg.setWindowFlags(self.msg.windowFlags()|Qt.WindowStaysOnTopHint)
-            self.msg.open()
+            msg = QMessageBox(QMessageBox.Information,"提醒",s[4])
+            msg.setWindowFlags(msg.windowFlags()|Qt.WindowStaysOnTopHint)
+            msg.open()
+            self.msgbox.append(msg)
             # QMessageBox.information(None,"提醒",s[4])
         elif s[0] == "关机":
             os.popen("shutdown /s /t 60")
@@ -310,7 +317,7 @@ class Add(QWidget):
         table.setItem(row,3,QTableWidgetItem(status))
         table.setItem(row,4,QTableWidgetItem(content))
         table.verticalScrollBar().setValue(table.verticalScrollBar().maximum())
-        if self.editting:
+        if self.editting: #第6列时上一次执行时间，不在表格显示，只记录在配置文件
             Config.config["schedule"][row] = [action,time,repeat,status,content,Config.config["schedule"][row][5]]
         else:
             # table.setItem(row,3,QTableWidgetItem("启用"))
