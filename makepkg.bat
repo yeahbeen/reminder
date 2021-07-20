@@ -1,0 +1,2 @@
+pyinstaller reminder.py --distpath="./pyinstaller/dist" --workpath="./pyinstaller/build" --add-data="sound;sound" --add-data="picture;picture" --add-data="cherry.ico;." --icon="cherry.ico" --noconfirm -w
+pause

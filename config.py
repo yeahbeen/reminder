@@ -1,11 +1,12 @@
-
 import os
 import json
+from log import log
 
 class Config(object):
     config = {}
-    workdir = os.path.dirname(__file__)
-    print("workdir2:"+workdir)
+    # workdir = os.path.dirname(__file__)
+    workdir = os.getcwd()
+    log("workdir2:"+workdir)
     configfile = workdir+"\\config.json"
 
     @classmethod
@@ -48,6 +49,8 @@ class Config(object):
             Config.config["long"]["restset"]["insound"] = True
             Config.config["long"]["restset"]["insoundpath"] = Config.workdir + "\\sound\\relax.mp3"
             Config.config["long"]["restset"]["insoundvol"] = 50
+            Config.config["set"] = {}
+            Config.config["set"]["autorun"] = True
             Config.config["set"]["fullscreen"] = True
             Config.config["set"]["afterfullscreen"] = True
             Config.config["schedule"] = []
