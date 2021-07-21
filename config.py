@@ -1,11 +1,12 @@
 import os
+import sys
 import json
 from log import log
 
 class Config(object):
     config = {}
-    # workdir = os.path.dirname(__file__)
-    workdir = os.getcwd()
+    log(sys.argv)
+    workdir = os.path.dirname(os.path.abspath(sys.argv[0]))
     log("workdir2:"+workdir)
     configfile = workdir+"\\config.json"
 

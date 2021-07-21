@@ -2,6 +2,7 @@ __pycache__/
 cxfreeze
 dist
 pyinstaller
+reminder/
 *.log
 *.spec
 *.lnk

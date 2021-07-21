@@ -1,5 +1,11 @@
 import logging
 import logging.handlers
+import sys
+import os
+
+print(sys.argv)
+workdir = os.path.dirname(os.path.abspath(sys.argv[0]))
+print("workdir3:"+workdir)
 
 logger = logging.getLogger('mylogger')
 logger.setLevel(logging.DEBUG)
@@ -9,7 +15,7 @@ fm = logging.Formatter("%(asctime)s-%(filename)s-%(lineno)d - %(message)s",datef
 s_handler = logging.StreamHandler()
 s_handler.setFormatter(fm)
 
-rf_handler = logging.handlers.RotatingFileHandler('log.log', maxBytes=30000000, backupCount=1,encoding='utf8')
+rf_handler = logging.handlers.RotatingFileHandler(workdir+'\\log.log', maxBytes=30000000, backupCount=1,encoding='utf8')
 rf_handler.setFormatter(fm)
 
 logger.addHandler(s_handler)

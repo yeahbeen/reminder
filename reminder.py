@@ -12,11 +12,9 @@ import schedule
 from config import Config
 import mytimer
 from log import log
-# import ctypes
-# from ctypes import wintypes
 
-# workdir = os.path.dirname(__file__)
-workdir = os.getcwd()
+log(sys.argv)
+workdir = os.path.dirname(os.path.abspath(sys.argv[0]))
 log("workdir:"+workdir)
 
 Config.init()
@@ -190,7 +188,6 @@ class RemainderMain(QWidget):
 
     #启动
     def start(self):
-        log("4444444444444444")
         self.save_config()
         self.transwin = TransWin()
         self.rollwin = RollPic(self)
