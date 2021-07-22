@@ -157,7 +157,10 @@ class RemainderMain(QWidget):
         #托盘
         self.quitAction = QAction("退出")
         self.quitAction.triggered.connect(QCoreApplication.quit)
+        self.restnowAction = QAction("立即休息")
+        self.restnowAction.triggered.connect(self.restnow)
         self.trayIconMenu = QMenu()
+        self.trayIconMenu.addAction(self.restnowAction)
         self.trayIconMenu.addAction(self.quitAction)
         self.trayIcon = QSystemTrayIcon()
         self.trayIcon.setContextMenu(self.trayIconMenu)
@@ -185,6 +188,9 @@ class RemainderMain(QWidget):
         if action == QSystemTrayIcon.Trigger or action == QSystemTrayIcon.DoubleClick:
             self.showNormal()
             self.activateWindow()
+            
+    def restnow(self):
+        self.ontimer(self.longtimer)
 
     #启动
     def start(self):
