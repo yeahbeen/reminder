@@ -157,10 +157,13 @@ class RemainderMain(QWidget):
         #托盘
         self.quitAction = QAction("退出")
         self.quitAction.triggered.connect(QCoreApplication.quit)
-        self.restnowAction = QAction("立即休息")
-        self.restnowAction.triggered.connect(self.restnow)
+        self.shortrestnowAction = QAction("立即短休息")
+        self.shortrestnowAction.triggered.connect(self.shortrestnow)
+        self.longrestnowAction = QAction("立即长休息")
+        self.longrestnowAction.triggered.connect(self.longrestnow)
         self.trayIconMenu = QMenu()
-        self.trayIconMenu.addAction(self.restnowAction)
+        self.trayIconMenu.addAction(self.shortrestnowAction)
+        self.trayIconMenu.addAction(self.longrestnowAction)
         self.trayIconMenu.addAction(self.quitAction)
         self.trayIcon = QSystemTrayIcon()
         self.trayIcon.setContextMenu(self.trayIconMenu)
@@ -176,7 +179,8 @@ class RemainderMain(QWidget):
         self.setWindowTitle('护眼助手')  
         #设置对话框
         self.setting = Set(self)
-        self.lastrestingtime = QTime.currentTime()
+        # self.lastrestingtime = QTime.currentTime()
+        self.lastrestingtime = QTime(0,0)
         log("lastrestingtime0:"+str(self.lastrestingtime))
         self.show()
         self.start()
@@ -189,7 +193,10 @@ class RemainderMain(QWidget):
             self.showNormal()
             self.activateWindow()
             
-    def restnow(self):
+    def shortrestnow(self):
+        self.ontimer(self.shorttimer)
+        
+    def longrestnow(self):
         self.ontimer(self.longtimer)
 
     #启动
@@ -320,7 +327,7 @@ class RemainderMain(QWidget):
         if timer is None:
             timer = self.sender()
          
-        #距离上一次长休息的时间较短就不休息
+        #距离上一次长休息的时间较短就不进行短休息
         if timer == self.shorttimer:
             self.flag = "short"
             log(self.shorttimer.interval())

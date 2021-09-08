@@ -84,7 +84,7 @@ class Schedule(QWidget):
     def start(self):
         log("in start")
         QApplication.setQuitOnLastWindowClosed(False) #防止主程序最小化时，关闭弹框会导致程序退出
-        diff = 86400000 + QTime.currentTime().msecsTo(QTime(0,0,1))
+        diff = 86400000 + QTime.currentTime().msecsTo(QTime(0,1,0))
         log(diff)
         QTimer.singleShot(diff,self.start) #0点的时候重置一下计时器
         self.msgbox = []   #所有弹框存起来，否则会被顶掉
@@ -114,7 +114,7 @@ class Schedule(QWidget):
                 elif s[2] == "仅一次":
                     nexttime = lasttime.addYears(100)
                 log(nexttime)
-            if QDateTime.currentDateTime() > nexttime and s[0] != "关机": #当前时间大于下一次的时间则表明已过期;关机不提醒
+            if QDateTime.currentDateTime() > nexttime and s[0] != "关机" and s[2] != "每小时": #当前时间大于下一次的时间则表明已过期;关机不提醒;每小时不提醒
                 msg = QMessageBox(QMessageBox.Information,"以下日程已过期","内容:"+s[0]+" "+s[4]+"\n"+"时间:"+s[1]+"\n"+"重复:"+s[2])
                 msg.setWindowFlags(msg.windowFlags()|Qt.WindowStaysOnTopHint)
                 msg.open()
@@ -151,10 +151,24 @@ class Schedule(QWidget):
             if flag or s[2] == "仅一次" or s[2] == "每天": #到了指定日期则启动计时器
                 diff = QTime.currentTime().msecsTo(dt.time())
                 log("diff:"+str(diff))
-                if diff >= 0:
+                if diff > 0:
                     timer = mytimer.mytimer(s)
                     self.schedule_timer.append(timer)
                     timer.setSingleShot(True)
+                    timer.timeout.connect(self.schedule_ontimer)
+                    timer.start(diff)   
+            if s[2] == "每小时":
+                settime = dt.time()
+                curtime = QTime.currentTime()
+                if settime.minute()*60+settime.second() > curtime.minute()*60+curtime.second():
+                    diff = (settime.minute()*60+settime.second() - curtime.minute()*60+curtime.second())*1000
+                else:
+                    diff = (settime.minute()*60+settime.second() - curtime.minute()*60+curtime.second() + 3600)*1000
+                log("diff:"+str(diff))
+                if diff > 0:
+                    timer = mytimer.mytimer(s)
+                    self.schedule_timer.append(timer)
+                    # timer.setSingleShot(True)
                     timer.timeout.connect(self.schedule_ontimer)
                     timer.start(diff)   
             
@@ -191,6 +205,8 @@ class Schedule(QWidget):
                 Config.config["schedule"][row][3] = "已过期"
             Config.config["schedule"][row][5] = QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm:ss")
         Config.save()
+        if s[2] == "每小时":
+            timer.start(3600*1000)
 
 
 class Add(QWidget):
@@ -239,7 +255,7 @@ class Add(QWidget):
         repeat_label.setMaximumWidth(30)
         repeat_hbox.addWidget(repeat_label)
         self.repeat_combo = QComboBox()
-        self.repeat_combo.addItems(["仅一次","每天","每周","每月"])    
+        self.repeat_combo.addItems(["仅一次","每天","每周","每月","每小时"])    
         repeat_hbox.addWidget(self.repeat_combo)  
         enable_hbox = QHBoxLayout()
         enable_label = QLabel("状态:")
