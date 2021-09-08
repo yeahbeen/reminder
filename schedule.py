@@ -161,9 +161,9 @@ class Schedule(QWidget):
                 settime = dt.time()
                 curtime = QTime.currentTime()
                 if settime.minute()*60+settime.second() > curtime.minute()*60+curtime.second():
-                    diff = (settime.minute()*60+settime.second() - curtime.minute()*60+curtime.second())*1000
+                    diff = (settime.minute()*60+settime.second() - (curtime.minute()*60+curtime.second()))*1000
                 else:
-                    diff = (settime.minute()*60+settime.second() - curtime.minute()*60+curtime.second() + 3600)*1000
+                    diff = (settime.minute()*60+settime.second() - (curtime.minute()*60+curtime.second()) + 3600)*1000
                 log("diff:"+str(diff))
                 if diff > 0:
                     timer = mytimer.mytimer(s)
