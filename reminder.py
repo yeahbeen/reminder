@@ -886,6 +886,7 @@ class RollPic(QWidget):
                 self.filelist.append(path)
 
     def recover(self):
+        self.par.lastrestingtime = QTime(0,0) #跳过不算休息
         self.par.recover_roll(self.timer)
 
 if __name__ == '__main__':
