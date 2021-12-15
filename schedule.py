@@ -110,15 +110,18 @@ class Schedule(QWidget):
                 log(lasttime)
                 if s[2] == "每天":
                     nexttime = lasttime.addDays(1)
-                elif s[2] == "每周":
+                # elif s[2] == "每周":
+                elif s[2].find("每周") == 0:
                     nexttime = lasttime.addDays(7)
-                elif s[2] == "每月":
+                # elif s[2] == "每月":
+                elif s[2].find("每月") == 0:
                     nexttime = lasttime.addMonths(1)
                 # elif s[2] == "仅一次":
                 else: #每小时/自定义/仅一次不提醒
                     nexttime = lasttime.addYears(100)
                 log(nexttime)
             if s[0] != "关机" and QDateTime.currentDateTime() > nexttime : #当前时间大于下一次的时间则表明已过期;关机不提醒;
+                log("以下日程已过期: "+"内容:"+s[0]+" "+s[4]+"   "+"时间:"+s[1]+"   "+"重复:"+s[2])
                 msg = QMessageBox(QMessageBox.Information,"以下日程已过期","内容:"+s[0]+" "+s[4]+"\n"+"时间:"+s[1]+"\n"+"重复:"+s[2])
                 msg.setWindowFlags(msg.windowFlags()|Qt.WindowStaysOnTopHint)
                 msg.open()
@@ -129,11 +132,14 @@ class Schedule(QWidget):
                     nexttime0 = nexttime
                     if s[2] == "每天":
                         nexttime = nexttime0.addDays(1)
-                    elif s[2] == "每周":
+                    # elif s[2] == "每周":
+                    elif s[2].find("每周") == 0:
                         nexttime = nexttime0.addDays(7)
-                    elif s[2] == "每月":
+                    # elif s[2] == "每月":
+                    elif s[2].find("每月") == 0:
                         nexttime = nexttime0.addMonths(1)
-                    elif s[2] == "仅一次":
+                    # elif s[2] == "仅一次":
+                    else:
                         nexttime = nexttime0.addYears(100)
                     log(nexttime)
                 s[5] = nexttime0.toString("yyyy-MM-dd hh:mm:ss")
@@ -592,12 +598,12 @@ class Add(QWidget):
         table.setItem(row,2,QTableWidgetItem(repeat))
         table.setItem(row,3,QTableWidgetItem(status))
         table.setItem(row,4,QTableWidgetItem(content))
-        table.verticalScrollBar().setValue(table.verticalScrollBar().maximum())
         if self.editting: #第6列时上一次执行时间，不在表格显示，只记录在配置文件
             Config.config["schedule"][row] = [action,time,repeat,status,content,Config.config["schedule"][row][5]]
         else:
             # table.setItem(row,3,QTableWidgetItem("启用"))
             Config.config["schedule"].append([action,time,repeat,status,content,""])
+            table.verticalScrollBar().setValue(table.verticalScrollBar().maximum())
         self.hide()
         
     def cansel(self):
