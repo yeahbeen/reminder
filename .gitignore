@@ -4,6 +4,7 @@ dist
 pyinstaller
 reminder/
 *.log
+*.log.1
 *.spec
 *.lnk
 
