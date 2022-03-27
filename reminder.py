@@ -182,7 +182,9 @@ class RemainderMain(QWidget):
         # self.lastrestingtime = QTime.currentTime()
         self.lastrestingtime = QTime(0,0)
         log("lastrestingtime0:"+str(self.lastrestingtime))
-        self.show()
+        if not Config.config["set"]["minimize"]:
+            self.show()
+        # self.show()
         self.start()
         self.schedule = schedule.Schedule(self)
         self.schedule.start()
@@ -403,6 +405,8 @@ class RemainderMain(QWidget):
         skipbtn = QPushButton("跳过")
         self.popup.addButton(skipbtn,QMessageBox.AcceptRole)
         skipbtn.clicked.connect(self.recover_pop)
+        if not Config.config["set"]["allowskip"]:
+            skipbtn.hide()
         self.popup.setWindowFlags(Qt.WindowStaysOnTopHint|Qt.WindowMaximizeButtonHint | Qt.MSWindowsFixedSizeDialogHint)
         # self.popup.setFixedSize(200,80)
         self.update_pop_cd_timer = QTimer()
@@ -753,6 +757,8 @@ class Set(QWidget):
         self.setGeometry(rect.x()+50,rect.y()+50,200,100)
         self.autorun = QCheckBox("开机启动")
         self.autorun.stateChanged.connect(self.setAutorun)
+        self.minimize = QCheckBox("启动后最小化")
+        self.minimize.stateChanged.connect(self.setMinimize)
         # settings = QSettings("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run",QSettings.NativeFormat)
         # log("allkeys:"+str(settings.allKeys()))
         # log(sys.argv)
@@ -765,19 +771,30 @@ class Set(QWidget):
         self.fullscreen.stateChanged.connect(self.setfsrest)
         self.afterfs = QCheckBox("退出全屏后立即休息")
         self.afterfs.stateChanged.connect(self.setafterfs)
+        self.allowskip = QCheckBox("允许跳过休息")
+        self.allowskip.stateChanged.connect(self.setAllowskip)
         if "set" not in Config.config.keys():
             Config.config["set"] = {}
             self.autorun.setChecked(True)
+            self.minimize.setChecked(True)
             self.fullscreen.setChecked(True)
             self.afterfs.setChecked(True)
+            self.allowskip.setChecked(True)
         else:
             self.autorun.setChecked(Config.config["set"]["autorun"])
+            if "minimize" not in Config.config["set"]:
+                Config.config["set"]["minimize"] = True
+            self.minimize.setChecked(Config.config["set"]["minimize"])
             self.fullscreen.setChecked(Config.config["set"]["fullscreen"])
             self.afterfs.setChecked(Config.config["set"]["afterfullscreen"])
+            if "allowskip" not in Config.config["set"]:
+                Config.config["set"]["allowskip"] = True
+            self.allowskip.setChecked(Config.config["set"]["allowskip"])
             
             
         vbox = QVBoxLayout()
         vbox.addWidget(self.autorun)
+        vbox.addWidget(self.minimize)
         vbox.addWidget(self.fullscreen)
         hbox = QHBoxLayout()
         label = QLabel(" ")
@@ -785,6 +802,7 @@ class Set(QWidget):
         hbox.addWidget(label)
         hbox.addWidget(self.afterfs)
         vbox.addLayout(hbox)
+        vbox.addWidget(self.allowskip)
         self.setLayout(vbox)
 
     def setAutorun(self,state):
@@ -799,6 +817,12 @@ class Set(QWidget):
             Config.config["set"]["autorun"] = False
             settings.remove(os.path.splitext(os.path.basename(sys.argv[0]))[0])
             # settings.remove(os.path.splitext(os.path.basename(__file__))[0])
+
+    def setMinimize(self,state):
+        if state == Qt.Checked:
+            Config.config["set"]["minimize"] = True
+        elif state == Qt.Unchecked:
+            Config.config["set"]["minimize"] = False
             
     def setfsrest(self,state):
         if state == Qt.Checked:
@@ -816,6 +840,11 @@ class Set(QWidget):
         elif state == Qt.Unchecked:
             Config.config["set"]["afterfullscreen"] = False
             self.afterfs.setChecked(False)
+    def setAllowskip(self,state):
+        if state == Qt.Checked:
+            Config.config["set"]["allowskip"] = True
+        elif state == Qt.Unchecked:
+            Config.config["set"]["allowskip"] = False
             
     def closeEvent(self,e):
         Config.save()
@@ -886,8 +915,9 @@ class RollPic(QWidget):
                 self.filelist.append(path)
 
     def recover(self):
-        self.par.lastrestingtime = QTime(0,0) #跳过不算休息
-        self.par.recover_roll(self.timer)
+        if Config.config["set"]["allowskip"]:
+            self.par.lastrestingtime = QTime(0,0) #跳过不算休息
+            self.par.recover_roll(self.timer)
 
 if __name__ == '__main__':
     log(sys.argv)
