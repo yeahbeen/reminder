@@ -23,6 +23,10 @@ logger.addHandler(rf_handler)
 
 log = logger.debug
 
+#这样没法显示行号
+# def log(*msg): 
+    # logger.debug(msg)
+
 if __name__ == '__main__':
     logger.debug('debug message')
     logger.info('info message')
@@ -30,3 +34,5 @@ if __name__ == '__main__':
     logger.error('error message')
     logger.critical('critical message')
     log("log")
+    log(1)
+    # log("a","b")

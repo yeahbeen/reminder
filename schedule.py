@@ -79,6 +79,7 @@ class Schedule(QWidget):
         Config.config["schedule"].remove(Config.config["schedule"][row])
 
     def closeEvent(self,e):
+        # log(Config.config)
         Config.save()
         self.start()
 
