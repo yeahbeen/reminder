@@ -24,6 +24,7 @@ class RemainderMain(QWidget):
     def __init__(self):
         super().__init__()
         #短暂休息界面
+        log("begin main")
         self.shortRest = QGroupBox("短暂休息")
         self.shortRest.setCheckable(True)
         short_cd_hbox =  QHBoxLayout()
@@ -137,6 +138,7 @@ class RemainderMain(QWidget):
         layout.addLayout(countdown_hbox)
         layout.addLayout(start_hbox)
         self.setLayout(layout)
+        log("init config")
         #初始化
         if config != {}:   
             self.shortRest.setChecked(config["short"]["enable"])
@@ -156,14 +158,18 @@ class RemainderMain(QWidget):
             self.longSec2.setText(config["long"]["conSec"]) 
         #托盘
         self.quitAction = QAction("退出")
-        self.quitAction.triggered.connect(QCoreApplication.quit)
+        # self.quitAction.triggered.connect(QCoreApplication.quit)
+        self.quitAction.triggered.connect(self.quitapp)
         self.shortrestnowAction = QAction("立即短休息")
         self.shortrestnowAction.triggered.connect(self.shortrestnow)
         self.longrestnowAction = QAction("立即长休息")
         self.longrestnowAction.triggered.connect(self.longrestnow)
+        self.fstimeAction = QAction("关闭全屏显示时间")
+        self.fstimeAction.triggered.connect(self.openfstime)
         self.trayIconMenu = QMenu()
         self.trayIconMenu.addAction(self.shortrestnowAction)
         self.trayIconMenu.addAction(self.longrestnowAction)
+        self.trayIconMenu.addAction(self.fstimeAction)
         self.trayIconMenu.addAction(self.quitAction)
         self.trayIcon = QSystemTrayIcon()
         self.trayIcon.setContextMenu(self.trayIconMenu)
@@ -172,17 +178,24 @@ class RemainderMain(QWidget):
         self.trayIcon.show()
         #程序图标
         self.setWindowIcon(QIcon(workdir+"\\cherry.ico"))
-
         screen = QGuiApplication.primaryScreen()
         rect = screen.geometry()
         self.setGeometry(rect.center().x()-150,rect.center().y()-150, 300, 300)
         self.setWindowTitle('护眼助手')  
+        #全屏显示时间
+        log("prepare show time")
+        self.showtime = ShowTime()
+        # self.showtime.show()
         #设置对话框
         self.setting = Set(self)
+        if Config.config["set"]["fsshowtime"]:
+            self.fstimeAction.setText("关闭全屏显示时间")
+            self.showtime.start()
         # self.lastrestingtime = QTime.currentTime()
         self.lastrestingtime = QTime(0,0)
         log("lastrestingtime0:"+str(self.lastrestingtime))
-        self.show()
+        if not Config.config["set"]["minimize"]:
+            self.show()
         self.start()
         self.schedule = schedule.Schedule(self)
         self.schedule.start()
@@ -198,6 +211,16 @@ class RemainderMain(QWidget):
         
     def longrestnow(self):
         self.ontimer(self.longtimer)
+        
+    def openfstime(self):
+        if Config.config["set"]["fsshowtime"]:
+            self.fstimeAction.setText("开启全屏显示时间")
+            Config.config["set"]["fsshowtime"] = False
+            self.showtime.stop()
+        else:
+            self.fstimeAction.setText("关闭全屏显示时间")
+            Config.config["set"]["fsshowtime"] = True
+            self.showtime.start()
 
     #启动
     def start(self):
@@ -403,6 +426,8 @@ class RemainderMain(QWidget):
         skipbtn = QPushButton("跳过")
         self.popup.addButton(skipbtn,QMessageBox.AcceptRole)
         skipbtn.clicked.connect(self.recover_pop)
+        if not Config.config["set"]["allowskip"]:
+            skipbtn.hide()
         self.popup.setWindowFlags(Qt.WindowStaysOnTopHint|Qt.WindowMaximizeButtonHint | Qt.MSWindowsFixedSizeDialogHint)
         # self.popup.setFixedSize(200,80)
         self.update_pop_cd_timer = QTimer()
@@ -555,8 +580,13 @@ class RemainderMain(QWidget):
         Config.save()
         # with open(configfile,"w") as f:
         #     f.write(json.dumps(config,indent=4))
+    def quitapp(self):
+        log(config)
+        self.save_config()
+        QCoreApplication.quit()
 
     def closeEvent(self,e):
+        # log(config)
         self.save_config()
         self.hide()
         e.ignore()
@@ -750,9 +780,12 @@ class Set(QWidget):
         super().__init__()
         self.setWindowTitle("设置")
         rect = par.geometry()
+        self.par = par
         self.setGeometry(rect.x()+50,rect.y()+50,200,100)
         self.autorun = QCheckBox("开机启动")
         self.autorun.stateChanged.connect(self.setAutorun)
+        self.minimize = QCheckBox("启动后最小化")
+        self.minimize.stateChanged.connect(self.setMinimize)
         # settings = QSettings("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run",QSettings.NativeFormat)
         # log("allkeys:"+str(settings.allKeys()))
         # log(sys.argv)
@@ -765,19 +798,36 @@ class Set(QWidget):
         self.fullscreen.stateChanged.connect(self.setfsrest)
         self.afterfs = QCheckBox("退出全屏后立即休息")
         self.afterfs.stateChanged.connect(self.setafterfs)
+        self.allowskip = QCheckBox("允许跳过休息")
+        self.allowskip.stateChanged.connect(self.setAllowskip)
+        self.fsshowtime = QCheckBox("全屏程序显示时间")
         if "set" not in Config.config.keys():
             Config.config["set"] = {}
             self.autorun.setChecked(True)
+            self.minimize.setChecked(True)
             self.fullscreen.setChecked(True)
             self.afterfs.setChecked(True)
+            self.allowskip.setChecked(True)
+            self.fsshowtime.setChecked(True)
         else:
             self.autorun.setChecked(Config.config["set"]["autorun"])
+            if "minimize" not in Config.config["set"]:
+                Config.config["set"]["minimize"] = True
+            self.minimize.setChecked(Config.config["set"]["minimize"])
             self.fullscreen.setChecked(Config.config["set"]["fullscreen"])
             self.afterfs.setChecked(Config.config["set"]["afterfullscreen"])
+            if "allowskip" not in Config.config["set"]:
+                Config.config["set"]["allowskip"] = True
+            self.allowskip.setChecked(Config.config["set"]["allowskip"])
+            if "fsshowtime" not in Config.config["set"]:
+                Config.config["set"]["fsshowtime"] = True
+            self.fsshowtime.setChecked(Config.config["set"]["fsshowtime"])
             
+        self.fsshowtime.stateChanged.connect(self.setFsshowtime) #放后面，防止自动触发
             
         vbox = QVBoxLayout()
         vbox.addWidget(self.autorun)
+        vbox.addWidget(self.minimize)
         vbox.addWidget(self.fullscreen)
         hbox = QHBoxLayout()
         label = QLabel(" ")
@@ -785,6 +835,8 @@ class Set(QWidget):
         hbox.addWidget(label)
         hbox.addWidget(self.afterfs)
         vbox.addLayout(hbox)
+        vbox.addWidget(self.allowskip)
+        vbox.addWidget(self.fsshowtime)
         self.setLayout(vbox)
 
     def setAutorun(self,state):
@@ -799,6 +851,12 @@ class Set(QWidget):
             Config.config["set"]["autorun"] = False
             settings.remove(os.path.splitext(os.path.basename(sys.argv[0]))[0])
             # settings.remove(os.path.splitext(os.path.basename(__file__))[0])
+
+    def setMinimize(self,state):
+        if state == Qt.Checked:
+            Config.config["set"]["minimize"] = True
+        elif state == Qt.Unchecked:
+            Config.config["set"]["minimize"] = False
             
     def setfsrest(self,state):
         if state == Qt.Checked:
@@ -816,6 +874,18 @@ class Set(QWidget):
         elif state == Qt.Unchecked:
             Config.config["set"]["afterfullscreen"] = False
             self.afterfs.setChecked(False)
+    def setAllowskip(self,state):
+        if state == Qt.Checked:
+            Config.config["set"]["allowskip"] = True
+        elif state == Qt.Unchecked:
+            Config.config["set"]["allowskip"] = False
+    def setFsshowtime(self,state):
+        if state == Qt.Checked:
+            Config.config["set"]["fsshowtime"] = True
+            self.par.showtime.start()
+        elif state == Qt.Unchecked:
+            Config.config["set"]["fsshowtime"] = False
+            self.par.showtime.stop()
             
     def closeEvent(self,e):
         Config.save()
@@ -886,8 +956,119 @@ class RollPic(QWidget):
                 self.filelist.append(path)
 
     def recover(self):
-        self.par.lastrestingtime = QTime(0,0) #跳过不算休息
-        self.par.recover_roll(self.timer)
+        if Config.config["set"]["allowskip"]:
+            self.par.lastrestingtime = QTime(0,0) #跳过不算休息
+            self.par.recover_roll(self.timer)
+
+class ShowTime(QWidget):
+    def __init__(self):
+        log("in show time init")
+        super().__init__()
+        self.setWindowFlags(Qt.FramelessWindowHint|Qt.WindowStaysOnTopHint|Qt.SubWindow)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        # self.setWindowOpacity(1)
+        self.m_bDrag = False
+        screen = QGuiApplication.primaryScreen()
+        vbox = QVBoxLayout()
+        self.cdlabel = QLabel(time.strftime("%H:%M", time.localtime()))
+        # self.cdlabel.setMaximumHeight(20)
+        self.cdlabel.setStyleSheet("color: #dfdfdf;font-size: 13px;font-family: 微软雅黑;")
+        vbox.addWidget(self.cdlabel)
+        # self.btn = QPushButton("3333")
+        # self.btn.clicked.connect(self.setmyFont)
+        # vbox.addWidget(self.btn)
+        self.systimer = QTimer()
+        self.systimer.timeout.connect(self.updatetime)
+        self.systimer.setInterval(3000)
+        self.systimer.start()
+        vbox.setAlignment(Qt.AlignHCenter)
+        self.setLayout(vbox)
+        # vbox.setSpacing(0)
+        # log(vbox.spacing())
+        self.rect = screen.geometry()
+        # print(self.rect)
+        # print(self.rect.right(),self.rect.top())
+        # log(self.cdlabel.margin())
+        # log(self.cdlabel.indent())
+        # log(self.cdlabel.frameWidth())
+        # log(vbox.margin())
+        # log(self.frameWidth())
+        # self.setGeometry(rect.center().x(),rect.center().y(),40,20)
+        self.setCursor(Qt.SizeAllCursor)
+        self.chkfstimer = QTimer()
+        self.chkfstimer.timeout.connect(self.check_fullscreen)
+        self.chkfstimer.setInterval(3000)
+        # self.chkfstimer.start()
+        self.showstate = False
+        self.setGeometry(self.rect.right()-55,self.rect.top(),40,40)
+
+    # def setmyFont(self):
+        # font = QFontDialog.getFont(self.cdlabel.font())
+        # log(font)
+        # qi = QFontInfo(font[0])
+        # log(str(qi.family(),qi.styleName(),qi.pointSize()))
+        # if font[1]:
+            # self.cdlabel.setFont(font[0])
+        
+    def start(self):
+        log("show time timer start")
+        self.chkfstimer.start()
+        
+    def stop(self):
+        log("show time timer stop")
+        self.chkfstimer.stop()
+        
+    def updatetime(self):
+        self.cdlabel.setText(time.strftime("%H:%M", time.localtime())) 
+        
+    #检查全屏
+    def check_fullscreen(self):
+        self.fg_win = win32gui.GetForegroundWindow()
+        # log(self.fg_win)
+        title = win32gui.GetWindowText(self.fg_win)
+        # log(title)
+        if title == "":
+            log("desktop")
+            return False
+        rect = win32gui.GetWindowRect(self.fg_win)
+        # log(rect)
+        screen = QGuiApplication.primaryScreen()
+        rect2 = screen.geometry()
+        # log(rect2)
+        # log(f'{rect[2]} ,{rect2.width()},{rect[3]},{rect2.height()}')
+        if rect[2] == rect2.width() and rect[3] == rect2.height():
+            # log("full screen")
+            if not self.showstate:
+                self.show()
+                win32gui.SetForegroundWindow(self.fg_win)
+                self.showstate = True
+            # self.hide()
+        else:
+            # log("not full screen")
+            if self.showstate:
+                self.hide()
+                self.showstate = False
+            # self.show()
+        
+    def mousePressEvent(self,event):
+        if event.button() == Qt.LeftButton:
+            self.chkfstimer.stop()
+            self.m_bDrag = True
+            self.mouseStartPoint = event.globalPos()
+            self.windowTopLeftPoint = self.frameGeometry().topLeft()
+
+    def mouseMoveEvent(self,event):
+        if self.m_bDrag:
+            distance = event.globalPos() - self.mouseStartPoint
+            self.move(self.windowTopLeftPoint + distance)
+
+    def mouseReleaseEvent(self,event):
+        log("in mouse release event")
+        if event.button() == Qt.LeftButton:
+            win32gui.SetForegroundWindow(self.fg_win)
+            self.chkfstimer.start()
+            self.m_bDrag = False
+
 
 if __name__ == '__main__':
     log(sys.argv)

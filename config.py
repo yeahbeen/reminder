@@ -52,8 +52,11 @@ class Config(object):
             Config.config["long"]["restset"]["insoundvol"] = 50
             Config.config["set"] = {}
             Config.config["set"]["autorun"] = True
+            Config.config["set"]["minimize"] = True
             Config.config["set"]["fullscreen"] = True
             Config.config["set"]["afterfullscreen"] = True
+            Config.config["set"]["allowskip"] = True
+            Config.config["set"]["fsshowtime"] = True
             Config.config["schedule"] = []
 
     @classmethod

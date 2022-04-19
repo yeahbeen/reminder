@@ -15,13 +15,17 @@ fm = logging.Formatter("%(asctime)s-%(filename)s-%(lineno)d - %(message)s",datef
 s_handler = logging.StreamHandler()
 s_handler.setFormatter(fm)
 
-rf_handler = logging.handlers.RotatingFileHandler(workdir+'\\log.log', maxBytes=30000000, backupCount=1,encoding='utf8')
+rf_handler = logging.handlers.RotatingFileHandler(workdir+'\\log.log', maxBytes=10000000, backupCount=1,encoding='utf8')
 rf_handler.setFormatter(fm)
 
 logger.addHandler(s_handler)
 logger.addHandler(rf_handler)
 
 log = logger.debug
+
+#这样没法显示行号
+# def log(*msg): 
+    # logger.debug(msg)
 
 if __name__ == '__main__':
     logger.debug('debug message')
@@ -30,3 +34,5 @@ if __name__ == '__main__':
     logger.error('error message')
     logger.critical('critical message')
     log("log")
+    log(1)
+    # log("a","b")
