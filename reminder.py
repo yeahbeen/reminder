@@ -164,9 +164,12 @@ class RemainderMain(QWidget):
         self.shortrestnowAction.triggered.connect(self.shortrestnow)
         self.longrestnowAction = QAction("立即长休息")
         self.longrestnowAction.triggered.connect(self.longrestnow)
+        self.fstimeAction = QAction("关闭全屏显示时间")
+        self.fstimeAction.triggered.connect(self.openfstime)
         self.trayIconMenu = QMenu()
         self.trayIconMenu.addAction(self.shortrestnowAction)
         self.trayIconMenu.addAction(self.longrestnowAction)
+        self.trayIconMenu.addAction(self.fstimeAction)
         self.trayIconMenu.addAction(self.quitAction)
         self.trayIcon = QSystemTrayIcon()
         self.trayIcon.setContextMenu(self.trayIconMenu)
@@ -186,6 +189,7 @@ class RemainderMain(QWidget):
         #设置对话框
         self.setting = Set(self)
         if Config.config["set"]["fsshowtime"]:
+            self.fstimeAction.setText("关闭全屏显示时间")
             self.showtime.start()
         # self.lastrestingtime = QTime.currentTime()
         self.lastrestingtime = QTime(0,0)
@@ -207,6 +211,16 @@ class RemainderMain(QWidget):
         
     def longrestnow(self):
         self.ontimer(self.longtimer)
+        
+    def openfstime(self):
+        if Config.config["set"]["fsshowtime"]:
+            self.fstimeAction.setText("开启全屏显示时间")
+            Config.config["set"]["fsshowtime"] = False
+            self.showtime.stop()
+        else:
+            self.fstimeAction.setText("关闭全屏显示时间")
+            Config.config["set"]["fsshowtime"] = True
+            self.showtime.start()
 
     #启动
     def start(self):
