@@ -13,9 +13,15 @@ class Config(object):
     @classmethod
     def init(cls):
         if os.path.exists(Config.configfile):
-            with open(Config.configfile) as f:
-                Config.config = json.loads(f.read())
-        else:
+            if os.path.getsize(Config.configfile) == 0: #崩溃，被清空了
+                if os.path.exists(Config.configfile+".bak"):
+                    log("use config.json.bak")
+                    with open(Config.configfile+".bak") as f:
+                        Config.config = json.loads(f.read())
+            else:
+                with open(Config.configfile) as f:
+                    Config.config = json.loads(f.read())
+        if len(Config.config) == 0:  #文件为空，初始化
             Config.config["short"] = {}
             Config.config["short"]["enable"] = True
             Config.config["short"]["itvHour"] = "1"
@@ -38,6 +44,7 @@ class Config(object):
             Config.config["long"]["itvHour"] = "3"
             Config.config["long"]["itvMin"] = "0"
             Config.config["long"]["itvSec"] = "0"
+            Config.config["long"]["itvCount"] = "3"
             Config.config["long"]["conHour"] = "0"
             Config.config["long"]["conMin"] = "5"
             Config.config["long"]["conSec"] = "0"
@@ -63,3 +70,4 @@ class Config(object):
     def save(cls):
         with open(Config.configfile,"w") as f:
             f.write(json.dumps(Config.config,indent=4))
+        os.system(f'copy {Config.configfile} {Config.configfile}.bak')

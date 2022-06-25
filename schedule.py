@@ -10,6 +10,7 @@ from log import log
 class Schedule(QWidget):
     def __init__(self,par):
         super().__init__()
+        self.par = par
         self.setWindowTitle("定时程序")
         self.table = QTableWidget()
         self.table.setColumnCount(5)
@@ -19,7 +20,7 @@ class Schedule(QWidget):
         self.table.setColumnWidth(1,50)
         self.table.setColumnWidth(2,100)
         self.table.setColumnWidth(3,50)
-        self.table.setColumnWidth(4,100)
+        self.table.setColumnWidth(4,145)
         for i in range(len(Config.config["schedule"])):
             self.table.insertRow(i)
             self.table.setItem(i,0,QTableWidgetItem(Config.config["schedule"][i][0]))
@@ -56,7 +57,7 @@ class Schedule(QWidget):
         self.setLayout(self.vbox)
 
         rect = par.geometry()
-        self.setGeometry(rect.x(), rect.y(), 417, 300)
+        self.setGeometry(rect.x(), rect.y(), 468, 300)#长度比表格长63就没有滚动条
 
 
     def add(self):
@@ -86,9 +87,9 @@ class Schedule(QWidget):
     def start(self):
         log("in start")
         QApplication.setQuitOnLastWindowClosed(False) #防止主程序最小化时，关闭弹框会导致程序退出
-        diff = 86400000 + QTime.currentTime().msecsTo(QTime(0,1,0))
+        diff = 86400000 + QTime.currentTime().msecsTo(QTime(0,1,0))#0点的时候重置一下计时器
         log(diff)
-        QTimer.singleShot(diff,self.start) #0点的时候重置一下计时器
+        QTimer.singleShot(diff,self.start) 
         self.msgbox = []   #所有弹框存起来，否则会被顶掉
         self.schedule_timer = []
         for row in range(len(Config.config["schedule"])):
@@ -109,19 +110,16 @@ class Schedule(QWidget):
             else: #找出下一次应该执行的时间
                 lasttime = QDateTime.fromString(s[5],"yyyy-MM-dd hh:mm:ss")
                 log(lasttime)
-                if s[2] == "每天":
-                    nexttime = lasttime.addDays(1)
-                # elif s[2] == "每周":
-                elif s[2].find("每周") == 0:
+                if s[2].find("每周") == 0:
                     nexttime = lasttime.addDays(7)
-                # elif s[2] == "每月":
                 elif s[2].find("每月") == 0:
                     nexttime = lasttime.addMonths(1)
-                # elif s[2] == "仅一次":
-                else: #每小时/自定义/仅一次不提醒
+                # elif s[2] == "每天":
+                    # nexttime = lasttime.addDays(1)                    
+                else: #每小时/自定义/仅一次/每天不提醒
                     nexttime = lasttime.addYears(100)
                 log(nexttime)
-            if s[0] != "关机" and QDateTime.currentDateTime() > nexttime : #当前时间大于下一次的时间则表明已过期;关机不提醒;
+            if s[0] != "关机" and s[0] != "免打扰" and QDateTime.currentDateTime() > nexttime : #当前时间大于下一次的时间则表明已过期;关机不提醒;
                 log("以下日程已过期: "+"内容:"+s[0]+" "+s[4]+"   "+"时间:"+s[1]+"   "+"重复:"+s[2])
                 msg = QMessageBox(QMessageBox.Information,"以下日程已过期","内容:"+s[0]+" "+s[4]+"\n"+"时间:"+s[1]+"\n"+"重复:"+s[2])
                 msg.setWindowFlags(msg.windowFlags()|Qt.WindowStaysOnTopHint)
@@ -180,31 +178,6 @@ class Schedule(QWidget):
                     timer.setSingleShot(True)
                     timer.timeout.connect(self.schedule_ontimer)
                     timer.start(diff)   
-            '''
-            if re.match("每\d+.*",s[2]): #自定义
-                interval = 0
-                # if s[2].find("天") != -1:
-                    # obj = re.search(".*?(\d+)天",s[2])
-                    # interval += int(obj.group(1))*24*3600
-                if s[2].find("小时") != -1:
-                    obj = re.search(".*?(\d+)小时",s[2])
-                    interval += int(obj.group(1))*3600
-                if s[2].find("分钟") != -1:
-                    obj = re.search(".*?(\d+)分钟",s[2])
-                    interval += int(obj.group(1))*60
-                # lasttime = QDateTime.fromString(s[5],"yyyy-MM-dd hh:mm:ss")
-                # curtime = QDateTime.currentDateTime()
-                # howlong = lasttime.secsTo(curtime)
-                diff = QTime.currentTime().msecsTo(QTime.fromString(s[1],"hh:mm"))
-                if diff <= 0:
-                    diff = interval + diff
-                log(f'diff:{diff}')
-                timer = mytimer.mytimer(s)
-                self.schedule_timer.append(timer)
-                # timer.setSingleShot(True)
-                timer.timeout.connect(self.schedule_ontimer)
-                timer.start(diff*1000)  
-                '''
             if s[2] == "每小时" or re.match("每\d+.*",s[2]):
                 settime = QTime.fromString(s[1],"hh:mm")
                 curtime = QTime.currentTime()
@@ -235,6 +208,13 @@ class Schedule(QWidget):
     def schedule_ontimer(self):
         timer = self.sender()
         log(timer)
+        if self.par.resting:
+            new_timer = mytimer.mytimer(timer.args)
+            self.schedule_timer.append(new_timer)
+            new_timer.setSingleShot(True)
+            new_timer.timeout.connect(self.schedule_ontimer)
+            new_timer.start(self.par.rest_timer.remainingTime()+1000)   
+            return
         s = timer.args
         log("执行事件:"+str(s))
         if s[0] == "提醒":
@@ -247,11 +227,29 @@ class Schedule(QWidget):
             os.popen("shutdown /s /t 60")
         elif s[0] == "执行程序":
             os.popen(s[4])
+        elif s[0] == "免打扰":
+            from ctypes import cast, POINTER
+            from comtypes import CLSCTX_ALL
+            from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+            devices = AudioUtilities.GetSpeakers()
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            volume.SetMute(1, None) 
+            diff = QTime.currentTime().msecsTo(QTime.fromString(s[4].replace("结束时间:",""),"hh:mm"))
+            log(diff)
+            QTimer.singleShot(diff,self.setmute)
             
         itemlist = self.table.findItems(s[1],Qt.MatchExactly)
         for i in itemlist:
-            log(i)
+            log(i.text())
             row = self.table.row(i)
+            log(f"{self.table.item(row,0).text()},{self.table.item(row,2).text()},{self.table.item(row,3).text()},{self.table.item(row,4).text()}")
+            if s[0] != self.table.item(row,0).text()\
+               or s[2] != self.table.item(row,2).text()\
+               or s[3] != self.table.item(row,3).text()\
+               or s[4] != self.table.item(row,4).text():
+                 continue
+            log(f"found row:{row}")
             if s[2] == "仅一次":
                 self.table.setItem(row,3,QTableWidgetItem("已过期"))
                 Config.config["schedule"][row][3] = "已过期"
@@ -272,235 +270,268 @@ class Schedule(QWidget):
                 interval += int(obj.group(1))*60
             log(f'interval:{interval}')
             timer.start(interval*1000)
+            
+    def setmute(self):
+        log("关闭静音")
+        from ctypes import cast, POINTER
+        from comtypes import CLSCTX_ALL
+        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+        devices = AudioUtilities.GetSpeakers()
+        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        volume = cast(interface, POINTER(IAudioEndpointVolume))
+        volume.SetMute(0, None) 
 
 
 class Add(QWidget):
     def __init__(self,par,editting = False):
-        self.par = par
-        self.editting =  editting
-        super().__init__()
-        if self.editting:
-            self.setWindowTitle("编辑")
-        else:
-            self.setWindowTitle("新增")
+        log(f"in add init,edit:{editting}")
+        try:
+            self.par = par
+            self.editting =  editting
+            super().__init__()
+            if self.editting:
+                self.setWindowTitle("编辑")
+            else:
+                self.setWindowTitle("新增")
+            log(f"ui action")
+            #动作
+            action_hbox = QHBoxLayout()
+            action_label = QLabel("动作:")
+            action_label.setMaximumWidth(30)
+            action_hbox.addWidget(action_label)
+            self.action_combo = QComboBox()
+            self.action_combo.addItems(["提醒","关机","执行程序","免打扰"])
+            action_hbox.addWidget(self.action_combo)
+            msg_hbox = QHBoxLayout()  #提醒
+            msg_hbox.addWidget(QLabel("消息内容:"))
+            self.msg_edit = QLineEdit()
+            msg_hbox.addWidget(self.msg_edit)
+            self.msg_wdiget = QWidget()
+            self.msg_wdiget.setLayout(msg_hbox)
+            exe_hbox = QHBoxLayout() #执行程序
+            exe_hbox.addWidget(QLabel("程序:"))
+            self.exe_edit = QLineEdit()
+            exe_hbox.addWidget(self.exe_edit)
+            exe_btn = QPushButton("选择程序")
+            exe_btn.clicked.connect(self.open_exe)
+            exe_hbox.addWidget(exe_btn)
+            self.exe_wdiget = QWidget()
+            self.exe_wdiget.setLayout(exe_hbox)
+            self.exe_wdiget.hide()
+            #重复
+            log(f"ui repeat")
+            repeat_hbox = QHBoxLayout()
+            repeat_label = QLabel("重复:")
+            repeat_label.setMaximumWidth(30)
+            repeat_hbox.addWidget(repeat_label)
+            self.repeat_combo = QComboBox()
+            self.repeat_combo.addItems(["仅一次","每天","每周","每月","每小时","自定义小时数"])
+            repeat_hbox.addWidget(self.repeat_combo) 
+            date_hbox = QHBoxLayout() #仅一次
+            date_label = QLabel("日期:")
+            date_label.setMaximumWidth(30)
+            date_hbox.addWidget(date_label)
+            calendar = QCalendarWidget()
+            self.date_edit = QDateEdit(QDate.currentDate())
+            self.date_edit.setCalendarPopup(True)
+            self.date_edit.setCalendarWidget(calendar)
+            date_hbox.addWidget(self.date_edit)
+            self.date_wdiget = QWidget()
+            self.date_wdiget.setLayout(date_hbox)
+            self.Mon_checkbox = QCheckBox("周一") #每周
+            self.Tue_checkbox = QCheckBox("周二")
+            self.Wed_checkbox = QCheckBox("周三")
+            self.Thur_checkbox = QCheckBox("周四")
+            self.Fri_checkbox = QCheckBox("周五")
+            self.Sat_checkbox = QCheckBox("周六")
+            self.Sun_checkbox = QCheckBox("周日")
+            week_hbox = QHBoxLayout()
+            week_hbox.addWidget(self.Mon_checkbox)
+            week_hbox.addWidget(self.Tue_checkbox)
+            week_hbox.addWidget(self.Wed_checkbox)
+            week_hbox.addWidget(self.Thur_checkbox)
+            week_hbox.addWidget(self.Fri_checkbox)
+            week_hbox.addWidget(self.Sat_checkbox)
+            week_hbox.addWidget(self.Sun_checkbox)
+            self.week_wdiget = QWidget()
+            self.week_wdiget.setLayout(week_hbox)
+            self.week_wdiget.hide()
+            moon_hbox = QHBoxLayout() #每月
+            moon_hbox.addWidget(QLabel("每月"))
+            self.moon_edit = QLineEdit()
+            moon_hbox.addWidget(self.moon_edit)
+            moon_hbox.addWidget(QLabel("号(多个用英文逗号,隔开)"))
+            self.moon_wdiget = QWidget()
+            self.moon_wdiget.setLayout(moon_hbox)
+            self.moon_wdiget.hide()
+            custom_hbox = QHBoxLayout() #自定义小时
+            custom_hbox.addWidget(QLabel("每"))
+            self.hour_edit = QLineEdit("0")
+            custom_hbox.addWidget(self.hour_edit)
+            custom_hbox.addWidget(QLabel("小时"))
+            self.min_edit = QLineEdit("0")
+            custom_hbox.addWidget(self.min_edit)
+            custom_hbox.addWidget(QLabel("分钟"))
+            self.custom_wdiget = QWidget()
+            self.custom_wdiget.setLayout(custom_hbox)
+            self.custom_wdiget.hide()
+            #时间
+            log(f"ui time")
+            time_hbox = QHBoxLayout()
+            time_label = QLabel("时间:") 
+            time_label.setMaximumWidth(30)
+            time_hbox.addWidget(time_label)
+            self.hour_combo = QComboBox() #开始时间
+            self.hour_combo.addItems(map(lambda x:str(x), list(range(24))))
+            self.hour_combo.setCurrentText(str(QTime.currentTime().hour()))
+            time_hbox.addWidget(self.hour_combo)
+            time_hbox.addWidget(QLabel("时"))
+            self.min_combo = QComboBox()
+            self.min_combo.addItems(map(lambda x:str(x), list(range(60))))
+            self.min_combo.setCurrentText(str(QTime.currentTime().minute()))
+            time_hbox.addWidget(self.min_combo)
+            time_hbox.addWidget(QLabel("分"))
+            time_hbox2 = QHBoxLayout() #结束时间
+            time_hbox2.addWidget(QLabel("至"))
+            self.hour_combo2 = QComboBox()
+            self.hour_combo2.addItems(map(lambda x:str(x), list(range(24))))
+            self.hour_combo2.setCurrentText(str(QTime.currentTime().hour()))
+            time_hbox2.addWidget(self.hour_combo2)
+            time_hbox2.addWidget(QLabel("时"))
+            self.min_combo2 = QComboBox()
+            self.min_combo2.addItems(map(lambda x:str(x), list(range(60))))
+            self.min_combo2.setCurrentText(str(QTime.currentTime().minute()))
+            time_hbox2.addWidget(self.min_combo2)
+            time_hbox2.addWidget(QLabel("分"))
+            self.time_wdiget = QWidget()
+            self.time_wdiget.setLayout(time_hbox2)
+            self.time_wdiget.hide()
+            time_hbox.addWidget(self.time_wdiget)
+            #状态
+            log(f"ui state")
+            enable_hbox = QHBoxLayout()
+            enable_label = QLabel("状态:")
+            enable_label.setMaximumWidth(30)
+            enable_hbox.addWidget(enable_label)
+            self.enable_combo = QComboBox()
+            self.enable_combo.addItems(["启用","禁用","已过期"])    
+            enable_hbox.addWidget(self.enable_combo)  
+            #按钮
+            log(f"ui button")
+            self.confirmbtn = QPushButton("确定")
+            self.confirmbtn.clicked.connect(self.confirm)  
+            self.canselbtn = QPushButton("取消")
+            self.canselbtn.clicked.connect(self.cansel)  
+            confirm_hbox = QHBoxLayout()
+            confirm_hbox.addWidget(self.confirmbtn)
+            confirm_hbox.addWidget(self.canselbtn)
+            #外层layout
+            log(f"ui layout")
+            self.vbox = QVBoxLayout()
+            self.vbox.addLayout(action_hbox)
+            self.vbox.addWidget(self.msg_wdiget)
+            self.vbox.addWidget(self.exe_wdiget)
+            self.vbox.addLayout(repeat_hbox)
+            self.vbox.addWidget(self.week_wdiget)
+            self.vbox.addWidget(self.moon_wdiget)
+            self.vbox.addWidget(self.date_wdiget)
+            self.vbox.addWidget(self.custom_wdiget)
+            self.vbox.addLayout(time_hbox)
+            self.vbox.addLayout(enable_hbox)
+            self.vbox.addLayout(confirm_hbox)
+            self.setLayout(self.vbox)
+            self.action_combo.currentTextChanged.connect(self.change_action)
+            self.repeat_combo.currentTextChanged.connect(self.change_repeat)
+
+            rect = par.geometry()
+            self.setGeometry(rect.x(), rect.y(), 400, 150)
+            log(f"ui done")
             
-        action_hbox = QHBoxLayout()
-        action_label = QLabel("动作:")
-        action_label.setMaximumWidth(30)
-        action_hbox.addWidget(action_label)
-        self.action_combo = QComboBox()
-        self.action_combo.addItems(["提醒","关机","执行程序"])
-        action_hbox.addWidget(self.action_combo)
-        exe_hbox = QHBoxLayout()
-        exe_hbox.addWidget(QLabel("程序:"))
-        self.exe_edit = QLineEdit()
-        exe_hbox.addWidget(self.exe_edit)
-        exe_btn = QPushButton("选择程序")
-        exe_btn.clicked.connect(self.open_exe)
-        exe_hbox.addWidget(exe_btn)
-        self.exe_wdiget = QWidget()
-        self.exe_wdiget.setLayout(exe_hbox)
-        self.exe_wdiget.hide()
-        msg_hbox = QHBoxLayout()
-        msg_hbox.addWidget(QLabel("消息内容:"))
-        self.msg_edit = QLineEdit()
-        msg_hbox.addWidget(self.msg_edit)
-        self.msg_wdiget = QWidget()
-        self.msg_wdiget.setLayout(msg_hbox)
-
-        repeat_hbox = QHBoxLayout()
-        repeat_label = QLabel("重复:")
-        repeat_label.setMaximumWidth(30)
-        repeat_hbox.addWidget(repeat_label)
-        self.repeat_combo = QComboBox()
-        self.repeat_combo.addItems(["仅一次","每天","每周","每月","每小时","自定义小时数"])
-        
-        repeat_hbox.addWidget(self.repeat_combo) 
-        self.Mon_checkbox = QCheckBox("周一")
-        self.Tue_checkbox = QCheckBox("周二")
-        self.Wed_checkbox = QCheckBox("周三")
-        self.Thur_checkbox = QCheckBox("周四")
-        self.Fri_checkbox = QCheckBox("周五")
-        self.Sat_checkbox = QCheckBox("周六")
-        self.Sun_checkbox = QCheckBox("周日")
-        week_hbox = QHBoxLayout()
-        week_hbox.addWidget(self.Mon_checkbox)
-        week_hbox.addWidget(self.Tue_checkbox)
-        week_hbox.addWidget(self.Wed_checkbox)
-        week_hbox.addWidget(self.Thur_checkbox)
-        week_hbox.addWidget(self.Fri_checkbox)
-        week_hbox.addWidget(self.Sat_checkbox)
-        week_hbox.addWidget(self.Sun_checkbox)
-        self.week_wdiget = QWidget()
-        self.week_wdiget.setLayout(week_hbox)
-        self.week_wdiget.hide()
-        moon_hbox = QHBoxLayout()
-        moon_hbox.addWidget(QLabel("每月"))
-        self.moon_edit = QLineEdit()
-        moon_hbox.addWidget(self.moon_edit)
-        moon_hbox.addWidget(QLabel("号(多个用英文逗号,隔开)"))
-        self.moon_wdiget = QWidget()
-        self.moon_wdiget.setLayout(moon_hbox)
-        self.moon_wdiget.hide()
-        custom_hbox = QHBoxLayout()
-        custom_hbox.addWidget(QLabel("每"))
-        # self.day_edit = QLineEdit("0")
-        # custom_hbox.addWidget(self.day_edit)
-        # custom_hbox.addWidget(QLabel("天"))
-        self.hour_edit = QLineEdit("0")
-        custom_hbox.addWidget(self.hour_edit)
-        custom_hbox.addWidget(QLabel("小时"))
-        self.min_edit = QLineEdit("0")
-        custom_hbox.addWidget(self.min_edit)
-        custom_hbox.addWidget(QLabel("分钟"))
-        self.custom_wdiget = QWidget()
-        self.custom_wdiget.setLayout(custom_hbox)
-        self.custom_wdiget.hide()
-        
-        date_hbox = QHBoxLayout()
-        date_label = QLabel("日期:")
-        date_label.setMaximumWidth(30)
-        date_hbox.addWidget(date_label)
-        calendar = QCalendarWidget()
-        # self.date_edit = QDateTimeEdit(QDateTime.currentDateTime())
-        self.date_edit = QDateEdit(QDate.currentDate())
-        self.date_edit.setCalendarPopup(True)
-        self.date_edit.setCalendarWidget(calendar)
-        date_hbox.addWidget(self.date_edit)
-        self.date_wdiget = QWidget()
-        self.date_wdiget.setLayout(date_hbox)
-        # self.date_wdiget.hide()
-        
-        time_hbox = QHBoxLayout()
-        time_label = QLabel("时间:")
-        time_label.setMaximumWidth(30)
-        time_hbox.addWidget(time_label)
-        self.hour_combo = QComboBox()
-        self.hour_combo.addItems(map(lambda x:str(x), list(range(24))))
-        self.hour_combo.setCurrentText(str(QTime.currentTime().hour()))
-        time_hbox.addWidget(self.hour_combo)
-        time_hbox.addWidget(QLabel("时"))
-        self.min_combo = QComboBox()
-        self.min_combo.addItems(map(lambda x:str(x), list(range(60))))
-        self.min_combo.setCurrentText(str(QTime.currentTime().minute()))
-        time_hbox.addWidget(self.min_combo)
-        time_hbox.addWidget(QLabel("分"))
-        
-        enable_hbox = QHBoxLayout()
-        enable_label = QLabel("状态:")
-        enable_label.setMaximumWidth(30)
-        enable_hbox.addWidget(enable_label)
-        self.enable_combo = QComboBox()
-        self.enable_combo.addItems(["启用","禁用","已过期"])    
-        enable_hbox.addWidget(self.enable_combo)  
-        
-        self.confirmbtn = QPushButton("确定")
-        self.confirmbtn.clicked.connect(self.confirm)  
-        self.canselbtn = QPushButton("取消")
-        self.canselbtn.clicked.connect(self.cansel)  
-        confirm_hbox = QHBoxLayout()
-        confirm_hbox.addWidget(self.confirmbtn)
-        confirm_hbox.addWidget(self.canselbtn)
-
-        self.vbox = QVBoxLayout()
-        self.vbox.addLayout(action_hbox)
-        self.vbox.addWidget(self.msg_wdiget)
-        self.vbox.addWidget(self.exe_wdiget)
-        self.vbox.addLayout(repeat_hbox)
-        self.vbox.addWidget(self.week_wdiget)
-        self.vbox.addWidget(self.moon_wdiget)
-        self.vbox.addWidget(self.date_wdiget)
-        self.vbox.addWidget(self.custom_wdiget)
-        self.vbox.addLayout(time_hbox)
-        
-        self.vbox.addLayout(enable_hbox)
-        self.vbox.addLayout(confirm_hbox)
-        self.setLayout(self.vbox)
-        self.action_combo.currentTextChanged.connect(self.change_action)
-        self.repeat_combo.currentTextChanged.connect(self.change_repeat)
-
-        rect = par.geometry()
-        self.setGeometry(rect.x(), rect.y(), 400, 150)
-        
-        if self.editting:
-            table = self.par.table
-            items = table.selectedItems()
-            row = table.row(items[0])
-            action = table.item(row,0).text()
-            self.action_combo.setCurrentText(action)
-            if action == "提醒":
-                self.msg_wdiget.show()
-                self.exe_wdiget.hide()
-                self.msg_edit.setText(table.item(row,4).text())
-            elif action == "执行程序":
-                self.msg_wdiget.hide()
-                self.exe_wdiget.show()
-                self.exe_edit.setText(table.item(row,4).text())
-            else:
-                self.msg_wdiget.hide()
-                self.exe_wdiget.hide()
-                
-            repeat = table.item(row,2).text()
-            log(f'repeat:{repeat}')
-            if repeat == "每天" or repeat == "每小时":
-                self.repeat_combo.setCurrentText(repeat)
-            elif repeat.find("每周") == 0:
-                self.repeat_combo.setCurrentText("每周")
-                self.week_wdiget.show()
-                self.moon_wdiget.hide()
-                self.custom_wdiget.hide()
-                week_list = repeat.lstrip("每").split(" ")
-                for i in week_list:
-                    if i == "周一":
-                        self.Mon_checkbox.setChecked(True)
-                    elif i == "周二":
-                        self.Tue_checkbox.setChecked(True)
-                    elif i == "周三":
-                        self.Wed_checkbox.setChecked(True)
-                    elif i == "周四":
-                        self.Thur_checkbox.setChecked(True)
-                    elif i == "周五":
-                        self.Fri_checkbox.setChecked(True)
-                    elif i == "周六":
-                        self.Sat_checkbox.setChecked(True)
-                    elif i == "周日":
-                        self.Sun_checkbox.setChecked(True)
-            elif repeat.find("每月") == 0:
-                self.repeat_combo.setCurrentText("每月")
-                self.week_wdiget.hide()
-                self.moon_wdiget.show()
-                self.custom_wdiget.hide()
-                self.moon_edit.setText(repeat.strip("每月号"))
-            elif re.match("\d+/\d+/\d+",repeat): #仅一次
-                dt = QDateTime.fromString(repeat,"yyyy/MM/dd")
-                log(dt.toString())
-                self.date_edit.setDateTime(dt)
-            else:
-                self.repeat_combo.setCurrentText("自定义小时数")
-                self.week_wdiget.hide()
-                self.moon_wdiget.hide()
-                self.custom_wdiget.show()
-                # if repeat.find("天") != -1:
-                    # obj = re.search(".*?(\d+)天",repeat)
-                    # self.day_edit.setText(obj.group(1))
-                if repeat.find("小时") != -1:
-                    obj = re.search(".*?(\d+)小时",repeat)
-                    self.hour_edit.setText(obj.group(1))
-                if repeat.find("分钟") != -1:
-                    obj = re.search(".*?(\d+)分钟",repeat)
-                    self.min_edit.setText(obj.group(1))
+            if self.editting:  #编辑，要初始化
+                table = self.par.table
+                items = table.selectedItems()
+                row = table.row(items[0])
+                log(f"init action")
+                action = table.item(row,0).text()
+                self.action_combo.setCurrentText(action)
+                if action == "提醒":
+                    self.msg_wdiget.show()
+                    self.exe_wdiget.hide()
+                    self.msg_edit.setText(table.item(row,4).text())
+                elif action == "执行程序":
+                    self.msg_wdiget.hide()
+                    self.exe_wdiget.show()
+                    self.exe_edit.setText(table.item(row,4).text())
+                elif action == "免打扰":
+                    self.time_wdiget.show()
+                    time2 = table.item(row,4).text().replace("结束时间:","")
+                    log(time2)
+                    hour2 = str(int(time2.split(":")[0])) #去0
+                    minute2 = str(int(time2.split(":")[1]))
+                    self.hour_combo2.setCurrentText(hour2)
+                    self.min_combo2.setCurrentText(minute2)
+                else:
+                    self.msg_wdiget.hide()
+                    self.exe_wdiget.hide()
                     
-            time =  table.item(row,1).text()
-            log(time)
-            hour = str(int(time.split(":")[0])) #去0
-            minute = str(int(time.split(":")[1]))
-            self.hour_combo.setCurrentText(hour)
-            self.min_combo.setCurrentText(minute)
-            # dt = QDateTime.fromString(table.item(row,1).text(),"hh:mm M/dd/yyyy")
-            # log(dt.toString())
-            # self.dt_edit.setDateTime(QDateTime.fromString(table.item(row,1).text(),"hh:mm M/dd/yyyy"))
-            
-            self.enable_combo.setCurrentText(table.item(row,3).text())
+                log(f"init repeat")
+                repeat = table.item(row,2).text()
+                log(f'repeat:{repeat}')
+                if repeat == "每天" or repeat == "每小时":
+                    self.repeat_combo.setCurrentText(repeat)
+                elif repeat.find("每周") == 0:
+                    self.repeat_combo.setCurrentText("每周")
+                    self.week_wdiget.show()
+                    self.moon_wdiget.hide()
+                    self.custom_wdiget.hide()
+                    week_list = repeat.lstrip("每").split(" ")
+                    for i in week_list:
+                        if i == "周一":
+                            self.Mon_checkbox.setChecked(True)
+                        elif i == "周二":
+                            self.Tue_checkbox.setChecked(True)
+                        elif i == "周三":
+                            self.Wed_checkbox.setChecked(True)
+                        elif i == "周四":
+                            self.Thur_checkbox.setChecked(True)
+                        elif i == "周五":
+                            self.Fri_checkbox.setChecked(True)
+                        elif i == "周六":
+                            self.Sat_checkbox.setChecked(True)
+                        elif i == "周日":
+                            self.Sun_checkbox.setChecked(True)
+                elif repeat.find("每月") == 0:
+                    self.repeat_combo.setCurrentText("每月")
+                    self.week_wdiget.hide()
+                    self.moon_wdiget.show()
+                    self.custom_wdiget.hide()
+                    self.moon_edit.setText(repeat.strip("每月号"))
+                elif re.match("\d+/\d+/\d+",repeat): #仅一次
+                    dt = QDateTime.fromString(repeat,"yyyy/MM/dd")
+                    log(dt.toString())
+                    self.date_edit.setDateTime(dt)
+                else:
+                    self.repeat_combo.setCurrentText("自定义小时数")
+                    self.week_wdiget.hide()
+                    self.moon_wdiget.hide()
+                    self.custom_wdiget.show()
+                    if repeat.find("小时") != -1:
+                        obj = re.search(".*?(\d+)小时",repeat)
+                        self.hour_edit.setText(obj.group(1))
+                    if repeat.find("分钟") != -1:
+                        obj = re.search(".*?(\d+)分钟",repeat)
+                        self.min_edit.setText(obj.group(1))
+                log(f"init time")
+                time =  table.item(row,1).text()
+                log(time)
+                hour = str(int(time.split(":")[0])) #去0
+                minute = str(int(time.split(":")[1]))
+                self.hour_combo.setCurrentText(hour)
+                self.min_combo.setCurrentText(minute)
+                self.enable_combo.setCurrentText(table.item(row,3).text())
+                log(f"init done")
+        except Exception as e:
+            log(e)
 
 
     def confirm(self):
@@ -586,6 +617,15 @@ class Add(QWidget):
             if content == "":
                 QMessageBox.information(None,"提示","请填写程序路径！")
                 return
+        elif action == "免打扰":
+            hour2 = self.hour_combo2.currentText()
+            if int(hour2) < 10:
+                hour2 = "0" + hour2
+            minitue2 = self.min_combo2.currentText()
+            if int(minitue2) < 10:
+                minitue2 = "0" + minitue2
+            time2 = hour2 + ":" + minitue2
+            content = "结束时间:"+time2
                 
         table = self.par.table
         if self.editting:
@@ -613,12 +653,17 @@ class Add(QWidget):
     def change_action(self):
         log("in change_action")
         text = self.action_combo.currentText()
+        self.time_wdiget.hide()
         if text == "提醒":
             self.msg_wdiget.show()
             self.exe_wdiget.hide()
         elif text == "执行程序":
             self.msg_wdiget.hide()
             self.exe_wdiget.show()
+        elif text == "免打扰":
+            self.time_wdiget.show()
+            self.msg_wdiget.hide()
+            self.exe_wdiget.hide()
         else:
             self.msg_wdiget.hide()
             self.exe_wdiget.hide()
