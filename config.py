@@ -65,6 +65,8 @@ class Config(object):
             Config.config["set"]["allowskip"] = True
             Config.config["set"]["fsshowtime"] = True
             Config.config["schedule"] = []
+            Config.config["sendfile"] = {}
+            Config.config["sendfile"]["outpath"] = Config.workdir + "\\ReceiveFiles"
 
     @classmethod
     def save(cls):

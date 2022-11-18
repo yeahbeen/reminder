@@ -9,6 +9,9 @@ from PyQt5.QtGui import (QIcon,QKeySequence,QPixmap,QGuiApplication,QPainter,QCo
 from PyQt5.QtCore import *
 from PyQt5.QtMultimedia import QMediaPlayer,QMediaContent,QMediaPlaylist
 import schedule
+import sendfile
+import threading
+import socket
 from config import Config
 import mytimer
 from log import log
@@ -21,6 +24,9 @@ Config.init()
 config = Config.config
 
 class RemainderMain(QWidget):
+    
+    restnow = pyqtSignal()
+
     def __init__(self):
         super().__init__()
         #短暂休息界面
@@ -115,13 +121,18 @@ class RemainderMain(QWidget):
         # self.stopbtn.setDisabled(True)
         self.setbtn = QPushButton("设置...")
         self.setbtn.clicked.connect(self.showSet)
-        self.schedulebtn = QPushButton("定时程序")
-        self.schedulebtn.clicked.connect(self.showSchedule)
         start_hbox = QHBoxLayout()
         start_hbox.addWidget(self.startbtn)
         start_hbox.addWidget(self.stopbtn)
         start_hbox.addWidget(self.setbtn)
-        start_hbox.addWidget(self.schedulebtn)
+        
+        self.schedulebtn = QPushButton("定时程序")
+        self.schedulebtn.clicked.connect(self.showSchedule)        
+        self.sendbtn = QPushButton("传送文件")
+        self.sendbtn.clicked.connect(self.showSend)        
+        tool_hbox = QHBoxLayout()
+        tool_hbox.addWidget(self.schedulebtn)
+        tool_hbox.addWidget(self.sendbtn)
 
         #整体布局
         layout = QVBoxLayout()
@@ -129,6 +140,7 @@ class RemainderMain(QWidget):
         layout.addWidget(self.longRest)
         layout.addLayout(countdown_hbox)
         layout.addLayout(start_hbox)
+        layout.addLayout(tool_hbox)
         self.setLayout(layout)
         log("init config")
         #初始化
@@ -156,14 +168,18 @@ class RemainderMain(QWidget):
         self.quitAction.triggered.connect(self.quitapp)
         self.shortrestnowAction = QAction("立即短休息")
         self.shortrestnowAction.triggered.connect(self.shortrestnow)
+        self.restnow.connect(self.shortrestnow) #其他程序调起
         self.longrestnowAction = QAction("立即长休息")
         self.longrestnowAction.triggered.connect(self.longrestnow)
         self.fstimeAction = QAction("开启全屏显示时间")
         self.fstimeAction.triggered.connect(self.openfstime)
+        self.sendfileAction = QAction("发送文件")
+        self.sendfileAction.triggered.connect(self.menuSendfile)
         self.trayIconMenu = QMenu()
         self.trayIconMenu.addAction(self.shortrestnowAction)
         self.trayIconMenu.addAction(self.longrestnowAction)
         self.trayIconMenu.addAction(self.fstimeAction)
+        self.trayIconMenu.addAction(self.sendfileAction)
         self.trayIconMenu.addAction(self.quitAction)
         self.trayIcon = QSystemTrayIcon()
         self.trayIcon.setContextMenu(self.trayIconMenu)
@@ -193,6 +209,11 @@ class RemainderMain(QWidget):
         self.start()
         self.schedule = schedule.Schedule(self)
         self.schedule.start()
+        self.sendfile = sendfile.SendFile(self)
+        self.sendfile.start()
+        self.setAcceptDrops(True)
+        self.th = threading.Thread(target=self.acceptThread)
+        self.th.start()
     
     def showWin(self,action):
         log("action:"+str(action))
@@ -217,6 +238,9 @@ class RemainderMain(QWidget):
             Config.config["set"]["fsshowtime"] = True
             self.setting.fsshowtime.setChecked(True)
             # self.showtime.start()
+            
+    def menuSendfile(self):
+        self.sendfile.sendfile()
 
     #启动
     def start(self):
@@ -354,6 +378,11 @@ class RemainderMain(QWidget):
         # self.schd.show()
         self.schedule.show()
         
+    def showSend(self):
+        # self.schd = schedule.Schedule(self)
+        # self.schd.show()
+        self.sendfile.show()
+        
     def ontimer(self,flag=None):
         log("in ontimer")
         #同时只有一个休息
@@ -468,7 +497,7 @@ class RemainderMain(QWidget):
     def rollPic(self,rest_time):  
         self.rollwin.set_timer(self.restingtimer,self.flag)
         self.rollwin.show()
-        self.rollwin.setCDText("还剩"+str(rest_time//1000)+"秒,按Ctrl+D退出") #初始化
+        self.rollwin.setCDText("还剩"+str(rest_time//1000)+"秒,按Ctrl+X退出") #初始化
         #启动终止休息计时器
         # self.roll_timer = QTimer()
         # self.roll_timer.timeout.connect(self.recover_roll)
@@ -574,7 +603,7 @@ class RemainderMain(QWidget):
         # cd = self.roll_timer.remainingTime()
         cd = self.rest_timer.remainingTime()
         if cd >= 0:
-            self.rollwin.setCDText("还剩"+str(cd//1000)+"秒,按Ctrl+D退出")
+            self.rollwin.setCDText("还剩"+str(cd//1000)+"秒,按Ctrl+X退出")
         self.rollwin.update()
     #检查全屏
     def check_fullscreen(self):
@@ -632,6 +661,8 @@ class RemainderMain(QWidget):
     def quitapp(self):
         log(config)
         self.save_config()
+        self.game_rest = False
+        self.sendfile.stop()
         QCoreApplication.quit()
 
     def closeEvent(self,e):
@@ -639,6 +670,39 @@ class RemainderMain(QWidget):
         self.save_config()
         self.hide()
         e.ignore()
+        
+    def dragEnterEvent(self,event):
+        event.acceptProposedAction()
+        
+    def dropEvent(self,event):
+        files = event.mimeData().urls()
+        log(files)
+        self.sendfile.dragSendfile(files)
+        
+    def acceptThread(self):
+        s = socket.socket()        
+        host = "localhost"
+        port = 11233
+        s.bind((host, port))
+        s.listen()                
+        s.settimeout(5)
+        self.game_rest = True
+        while True:
+            try:
+                c,addr = s.accept()    
+            except socket.timeout as e:
+                # print(e)
+                # print("reminder accept check stop..")
+                if self.game_rest == False:
+                    break
+                else:
+                    continue
+            
+            print(c)
+            print(addr)
+            self.restnow.emit()
+
+
 
 #休息设置对话框     
 class RestSet(QWidget):
@@ -976,9 +1040,9 @@ class RollPic(QWidget):
         # self.setAttribute(Qt.WA_TranslucentBackground)
         screen = QGuiApplication.primaryScreen()
         hbox = QHBoxLayout()
-        self.cdlabel = QLabel("按Ctrl+D退出")
+        self.cdlabel = QLabel("按Ctrl+X退出")
         hbox.addWidget(self.cdlabel)
-        QShortcut(QKeySequence("Ctrl+D"),self).activated.connect(self.recover)
+        QShortcut(QKeySequence("Ctrl+X"),self).activated.connect(self.recover)
         hbox.setAlignment(Qt.AlignHCenter|Qt.AlignTop)
         self.setLayout(hbox)
         self.rect = screen.geometry()
@@ -1127,6 +1191,9 @@ class ShowTime(QWidget):
             win32gui.SetForegroundWindow(self.fg_win)
             self.chkfstimer.start()
             self.m_bDrag = False
+            
+            
+
 
 
 if __name__ == '__main__':
