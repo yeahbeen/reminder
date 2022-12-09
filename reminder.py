@@ -4,14 +4,16 @@ import time
 import random
 import json
 import win32gui
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import (QIcon,QKeySequence,QPixmap,QGuiApplication,QPainter,QColor,QTextCharFormat,QBrush,QTextCursor,QFont)
-from PyQt5.QtCore import *
+import socket
+import threading
+# from PyQt5.QtWidgets import *
+from PyQt5.QtWidgets import QWidget,QGroupBox,QHBoxLayout,QVBoxLayout,QLineEdit,QLabel,QPushButton,QRadioButton,QCheckBox,QApplication,QAction,QMenu,QSystemTrayIcon,QShortcut,QSlider,QFileDialog,QMessageBox
+from PyQt5.QtGui import QIcon,QKeySequence,QPixmap,QGuiApplication,QPainter,QColor,QTextCharFormat,QBrush,QTextCursor,QFont
+# from PyQt5.QtCore import *
+from PyQt5.QtCore import QTimer,QTime,QCoreApplication,QSettings,QUrl,pyqtSignal,Qt
 from PyQt5.QtMultimedia import QMediaPlayer,QMediaContent,QMediaPlaylist
 import schedule
 import sendfile
-import threading
-import socket
 from config import Config
 import mytimer
 from log import log
@@ -506,7 +508,7 @@ class RemainderMain(QWidget):
         #轮播图片
         self.update_roll_cd_timer = QTimer()
         self.update_roll_cd_timer.timeout.connect(self.update_roll_cd)
-        self.update_roll_cd_timer.start(10000)
+        self.update_roll_cd_timer.start(20000)
     #播放音乐
     def play_music(self,music,loop = True,volume = 20):
         self.player =QMediaPlayer()
@@ -1192,7 +1194,7 @@ class ShowTime(QWidget):
             self.chkfstimer.start()
             self.m_bDrag = False
             
-            
+
 
 
 

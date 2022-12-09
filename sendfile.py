@@ -1,18 +1,15 @@
 import os
 import re
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
-# from PyQt5.QtGui import QProgessBar
-from config import Config
-import mytimer
 import threading
 import socket
 import time
 import inspect
 import ctypes
+from PyQt5.QtWidgets import QFileDialog,QHBoxLayout,QLabel,QLineEdit,QMessageBox,QProgressBar,QPushButton,QTextEdit,QVBoxLayout,QWidget
+from PyQt5.QtCore import QTimer,Qt,pyqtSignal
+from config import Config
+import mytimer
 from log import log
-
-
 
 class SendFile(QWidget):
 
@@ -396,57 +393,5 @@ class SendFile(QWidget):
             # st.start()
             
 
-'''没有用
-def stop_thread(thread):
-    # _async_raise(thread.ident, SystemExit)
-    tid = thread.ident
-    exctype = SystemExit
-    """Raises an exception in the threads with id tid"""
-    if not inspect.isclass(exctype):
-        raise TypeError("Only types can be raised (not instances)")
-    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), ctypes.py_object(exctype))
-    if res == 0:
-        raise ValueError("invalid thread id")
-    elif res != 1:
-        # """if it returns a number greater than one, you're in trouble,
-        # and you should call it again with exc=NULL to revert the effect"""
-        ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, None)
-        raise SystemError("PyThreadState_SetAsyncExc failed")
-'''
-
-'''
-class AcceptThread(QtCore.QThread):
-    updated = QtCore.pyqtSignal(str)
-    def run( self ):
-        if not self.ip:
-            self.updated.emit("获取不到本机ip")
-            return
-        s = socket.socket()        
-        # host = "192.168.1.116"
-        host = self.ip
-        port = self.port                
-        s.bind((host, port))       
-        s.listen()                
-        s.settimeout(5)
-        #self.infoEdit.append(f"在{host}:{port}上监听接收文件..")
-        self.updated.emit(f"在{host}:{port}上监听接收文件..")
-        while True:
-            try:
-                c,addr = s.accept()    
-            except socket.timeout as e:
-                # print(e)
-                # print("check stop..")
-                if self.running == False:
-                    self.infoEdit.append(f"已停止监听..")
-                    self.stopbtn.setDisabled(True)
-                    self.startbtn.setDisabled(False)
-                    break
-                else:
-                    continue
-            print(c)
-            print(addr)
-            # _thread.start_new_thread(recvThread,(c,))
-            threading.Thread(target=self.recvThread,args=(c,)).start()
-'''
 
 

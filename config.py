@@ -71,5 +71,8 @@ class Config(object):
     @classmethod
     def save(cls):
         with open(Config.configfile,"w") as f:
+            log("crash here?")
             f.write(json.dumps(Config.config,indent=4))
+            log("crash here2?")
         os.system(f'copy {Config.configfile} {Config.configfile}.bak')
+        log("crash here3?")

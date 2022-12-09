@@ -7,5 +7,6 @@ reminder/
 *.log.1
 *.spec
 *.lnk
-
+ReceiveFiles/
+config.json.bak
 
