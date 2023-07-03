@@ -110,8 +110,9 @@ class Schedule(QWidget):
                 continue
             #过期提醒和更新下次执行时间
             nexttime = QDateTime.fromString(s[6],"yyyy-MM-dd hh:mm")
-            if nexttime < QDateTime.currentDateTime():#已经过了下次时间则表明已过期
-                if s[0] != "关机" and s[0] != "免打扰" and "小时" not in s[2]: #关机/免打扰不提醒;
+            print("###############",nexttime)
+            if s[6] != "" and nexttime < QDateTime.currentDateTime():#已经过了下次时间则表明已过期
+                if s[0] != "关机" and s[0] != "免打扰" and "小时" not in s[2]: #关机/免打扰/小时不提醒;
                     message = s[0]+":"+s[4]+"\n"+"时间:"+s[1]+"\n"+"重复:"+s[2]
                     log("以下日程已过期:"+message.replace("\n","   "))
                     msg = QMessageBox(QMessageBox.Information,"以下日程已过期",message)
@@ -184,8 +185,9 @@ class Schedule(QWidget):
                 if dt>QDateTime.currentDateTime():
                     break
                 i += 1
-            if i >= len(week_list): #所有日期都比当前时间小，到下一周了
-                should_time = QDateTime.currentDateTime().addDays(week_enum[week_list[0]]-week_enum[today]).addDays(7)
+            if i >= len(week_list): #所有日期都比当前时间小，到下一周了，取第一个
+                tmpdt = QDateTime.currentDateTime().addDays(week_enum[week_list[0]]-week_enum[today]).addDays(7)#该天日期
+                should_time = QDateTime.fromString(f'{tmpdt.toString("yyyy-MM-dd")} {s[1]}',"yyyy-MM-dd hh:mm")#具体时间
             else:
                 should_time = dt
         elif s[2].find("每月") == 0:
@@ -203,8 +205,9 @@ class Schedule(QWidget):
                 if dt>QDateTime.currentDateTime():
                     break
                 i += 1
-            if i >= len(date_list): #所有日期都比当前时间小，到下个月了
-                should_time = QDateTime.currentDateTime().addDays(date_list[0]-today).addMonths(1)
+            if i >= len(date_list): #所有日期都比当前时间小，到下个月了,取第一个
+                tmpdt = QDateTime.currentDateTime().addDays(date_list[0]-today).addMonths(1)#该天日期
+                should_time = QDateTime.fromString(f'{tmpdt.toString("yyyy-MM-dd")} {s[1]}',"yyyy-MM-dd hh:mm")#具体时间
             else:
                 should_time = dt
         elif s[2].find("每年") == 0:
@@ -258,7 +261,7 @@ class Schedule(QWidget):
 
     def schedule_ontimer(self):
         timer = self.sender()
-        log(timer)
+        # log(timer)
         if self.par.resting:
             new_timer = mytimer.mytimer(timer.args)
             self.schedule_timer.append(new_timer)
@@ -274,17 +277,29 @@ class Schedule(QWidget):
             # msg.open()
             # self.msgbox.append(msg)            
             
-            self.popup = QMessageBox(QMessageBox.Information,"提醒",s[4])
-            self.popup.setWindowTitle("提醒")
-            self.popup.setText("<font color=blue size=20>"+s[4]+"</font>")
+            # self.popup = QMessageBox(QMessageBox.Information,"提醒",s[4])
+            # self.popup.setWindowTitle("提醒")
+            # self.popup.setText("<font color=blue size=20>"+s[4]+"</font>")
+            # okbtn = QPushButton("确定")
+            # self.popup.addButton(okbtn,QMessageBox.AcceptRole)
+            # delaybtn = QPushButton("10分钟后提醒")
+            # delaybtn.setObjectName("|".join(s)) #用来传参
+            # self.popup.addButton(delaybtn,QMessageBox.AcceptRole)
+            # delaybtn.clicked.connect(self.delay)
+            # self.popup.setWindowFlags(Qt.WindowStaysOnTopHint|Qt.WindowMaximizeButtonHint | Qt.MSWindowsFixedSizeDialogHint)
+            # self.popup.open()
+            popup = QMessageBox(QMessageBox.Information,"提醒",s[4])
+            popup.setWindowTitle("提醒")
+            popup.setText("<font color=blue size=20>"+s[4]+"</font>")
             okbtn = QPushButton("确定")
-            self.popup.addButton(okbtn,QMessageBox.AcceptRole)
+            popup.addButton(okbtn,QMessageBox.AcceptRole)
             delaybtn = QPushButton("10分钟后提醒")
             delaybtn.setObjectName("|".join(s)) #用来传参
-            self.popup.addButton(delaybtn,QMessageBox.AcceptRole)
+            popup.addButton(delaybtn,QMessageBox.AcceptRole)
             delaybtn.clicked.connect(self.delay)
-            self.popup.setWindowFlags(Qt.WindowStaysOnTopHint|Qt.WindowMaximizeButtonHint | Qt.MSWindowsFixedSizeDialogHint)
-            self.popup.open()
+            popup.setWindowFlags(Qt.WindowStaysOnTopHint|Qt.WindowMaximizeButtonHint | Qt.MSWindowsFixedSizeDialogHint)
+            popup.open()
+            self.msgbox.append(popup)
         elif s[0] == "关机":
             os.popen("shutdown /s /t 60")
         elif s[0] == "执行程序":
@@ -314,11 +329,11 @@ class Schedule(QWidget):
                 Config.config["schedule"][row][5] = QDateTime.currentDateTime().addSecs(10).toString("yyyy-MM-dd hh:mm:ss")#记录的时间会快一点，加10s
                 nexttime = self.updateNext(Config.config["schedule"][row]) #更新下次时间
                 Config.config["schedule"][row][6] = nexttime
-                log("here crash?")
+                # log("here crash?")
                 self.table.setItem(row,5,QTableWidgetItem(nexttime))
-                log("here crash2?")
+                # log("here crash2?")
                 Config.save()
-                log("here crash3?")
+                # log("here crash3?")
                 break
         if "小时" in s[2]:
             interval = 0        

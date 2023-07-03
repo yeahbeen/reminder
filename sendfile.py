@@ -86,7 +86,7 @@ class SendFile(QWidget):
         self.setLayout(vbox)
 
         rect = par.geometry()
-        log(rect)
+        # log(rect)
         self.setGeometry(rect.x(), rect.y(), 300, 300)
         self.connectting = False
         self.ip = None
@@ -122,7 +122,7 @@ class SendFile(QWidget):
         ip_arr = self.ip.split(".")
         ip_arr[3] = "255"
         dest=(".".join(ip_arr),self.port)
-        log(dest)
+        log(f'broadcast addr:{dest}')
         st = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         st.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1)
         self.infoEdit.append(f"广播本机上线消息。")
@@ -138,7 +138,7 @@ class SendFile(QWidget):
         while True:
             try:
                 msg,addr=s.recvfrom(1024)
-                log('from %s bg %s'% (addr,msg.decode()))
+                log(f'receive broadcast message ({msg.decode()}) from {addr}')
                 if addr[0] != self.ip:
                     self.endpoint = addr[0]
                     self.eplabel.setText(self.endpoint)
@@ -172,7 +172,7 @@ class SendFile(QWidget):
         try:
             s.connect((host, port))
         except Exception as e:
-            print(e)
+            log(e)
             # self.infoEdit.append(f"连接失败，请确认对方是否在线")
             self.updated.emit(f"连接失败，请确认对方是否在线")
             self.connectting = False
@@ -199,7 +199,7 @@ class SendFile(QWidget):
                         rs = f.read(1024)
                         # print(len(rs))
                 # self.sendf.close()
-                print("fileover")
+                log("fileover")
                 # self.infoEdit.append(f"发送完成")
                 self.updated.emit(f"{filename}发送完成")
         except Exception as e:
@@ -271,7 +271,7 @@ class SendFile(QWidget):
         
     def recvThread(self,c):
         string = c.recv(1024).decode()
-        print(string)
+        log(string)
         if "sendfile" in string:
             filename = string.split("|")[1]
             filesize = int(string.split("|")[2])
@@ -291,10 +291,10 @@ class SendFile(QWidget):
                         break;                    
                     string = c.recv(1024)
 
-            print(count)
+            log(count)
             # self.infoEdit.append(f"接收完成")
             self.updated.emit(f"{filename}接收完成")
-            print("fileover")
+            log("fileover")
         c.close()
         
     def acceptThread(self):
@@ -324,8 +324,8 @@ class SendFile(QWidget):
                     break
                 else:
                     continue
-            print(c)
-            print(addr)
+            log(c)
+            log(addr)
             # _thread.start_new_thread(recvThread,(c,))
             threading.Thread(target=self.recvThread,args=(c,)).start()
             
@@ -339,7 +339,7 @@ class SendFile(QWidget):
         try:       
             st.connect(('10.255.255.255', 1))
             self.ip = st.getsockname()[0]
-            log(self.ip)
+            log(f'local ip:{self.ip}')
             self.iplabel.setText(self.ip)
             self.infoEdit.append("获取到本机IP:"+self.ip)
         except Exception:
@@ -349,13 +349,11 @@ class SendFile(QWidget):
         #先监听对端上线消息
         self.oth = threading.Thread(target=self.onlineThread)
         self.oth.start()        
-        print(self.oth.ident)
         #发送自己上线消息，对方会回复
         self.init()                
         #监听发文件消息
         self.th = threading.Thread(target=self.acceptThread)
         self.th.start()
-        print(self.th.ident)
         self.alive_th = {}
         self.sendtimer = QTimer()
         self.sendtimer.timeout.connect(self.changeprogress)

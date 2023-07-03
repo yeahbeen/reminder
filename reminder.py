@@ -6,6 +6,7 @@ import json
 import win32gui
 import socket
 import threading
+import PyHook3 as pyHook
 # from PyQt5.QtWidgets import *
 from PyQt5.QtWidgets import QWidget,QGroupBox,QHBoxLayout,QVBoxLayout,QLineEdit,QLabel,QPushButton,QRadioButton,QCheckBox,QApplication,QAction,QMenu,QSystemTrayIcon,QShortcut,QSlider,QFileDialog,QMessageBox
 from PyQt5.QtGui import QIcon,QKeySequence,QPixmap,QGuiApplication,QPainter,QColor,QTextCharFormat,QBrush,QTextCursor,QFont
@@ -17,6 +18,14 @@ import sendfile
 from config import Config
 import mytimer
 from log import log
+
+#一些常量
+IDLE_TIME = 600 #无动作多长时间算空闲，单位秒
+COUNTDOWN_TIME = 300 #界面上倒计时更新时间,单位毫秒
+TOOLTIPS_TIME = 60000 #托盘倒计时更新时间，单位毫秒
+FULLSCREEN_CHECK_TIME = 90000 #全屏检查时间，单位毫秒
+IDLE_CHECK_TIME = 60000 #空闲状态检查时间，单位毫秒
+
 
 log(sys.argv)
 workdir = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -31,8 +40,76 @@ class RemainderMain(QWidget):
 
     def __init__(self):
         super().__init__()
-        #短暂休息界面
         log("begin main")
+        #初始化界面
+        self.initUI()
+        #全屏显示时间
+        log("prepare show time")
+        self.showtime = ShowTime()
+        if Config.config["set"]["fsshowtime"]:
+            self.fstimeAction.setText("关闭全屏显示时间")
+            self.showtime.start()
+        #不最小化则显示窗口
+        if not Config.config["set"]["minimize"]:
+            self.show()
+            
+        # self.start()
+        
+        log("startting....")
+        #先初始化各种变量
+        self.resting = False
+        self.store_flag = None
+        self.idle_store_flag = None
+        self.rest_count = 0        
+        self.passed_time = 0
+        ##休息窗口
+        self.transwin = TransWin()
+        self.rollwin = RollPic(self)
+        ##休息间隔计时器
+        self.shorttimer = mytimer.mytimer("pop")
+        # self.longtimer = mytimer.mytimer("roll")
+        self.shorttimer.timeout.connect(self.ontimer)
+        ##更新倒计时
+        self.update_countdown_timer = QTimer()
+        self.update_countdown_timer.timeout.connect(self.update_countdown)
+        self.tips_timer = QTimer()
+        self.tips_timer.timeout.connect(self.update_tooltips)
+        ##退出全屏时休息，每30秒检查一次
+        self.checkfulltimer = QTimer()
+        self.checkfulltimer.timeout.connect(self.real_check_fullscreen)
+        #监听鼠标键盘，判断空闲状态
+        self.hm = pyHook.HookManager()
+        self.hm.KeyDown = self.onKeyboardEvent
+        self.hm.MouseAll = self.onMouseEvent
+        self.hm.HookMouse()
+        self.hm.HookKeyboard()
+        self.lastActiveTime = time.time()
+        #退出空闲状态时休息，每60秒检查一次
+        self.check_idle_timer = QTimer()
+        self.check_idle_timer.timeout.connect(self.check_idle)
+        #检查配置是否正确
+        if not self.check_config():
+            self.show()
+            return    
+        self.startbtn.setText("暂停")
+        self.save_config()
+        self.get_shorttimeout()
+        self.start_timers(self.shorttimeout)
+        
+        #设置对话框
+        self.setting = Set(self)            
+        #定时程序
+        self.schedule = schedule.Schedule(self)
+        self.schedule.start()
+        #发送文件
+        self.sendfile = sendfile.SendFile(self)
+        self.sendfile.start()
+        self.setAcceptDrops(True)
+        #接受休息请求
+        self.th = threading.Thread(target=self.acceptThread)
+        self.th.start()
+        
+    def initUI(self):
         self.shortRest = QGroupBox("短暂休息")
         self.shortRest.setCheckable(True)
         # short_cd_hbox =  QHBoxLayout()
@@ -177,11 +254,14 @@ class RemainderMain(QWidget):
         self.fstimeAction.triggered.connect(self.openfstime)
         self.sendfileAction = QAction("发送文件")
         self.sendfileAction.triggered.connect(self.menuSendfile)
+        self.scheduleAction = QAction("定时程序")
+        self.scheduleAction.triggered.connect(self.showSchedule)
         self.trayIconMenu = QMenu()
         self.trayIconMenu.addAction(self.shortrestnowAction)
         self.trayIconMenu.addAction(self.longrestnowAction)
         self.trayIconMenu.addAction(self.fstimeAction)
         self.trayIconMenu.addAction(self.sendfileAction)
+        self.trayIconMenu.addAction(self.scheduleAction)
         self.trayIconMenu.addAction(self.quitAction)
         self.trayIcon = QSystemTrayIcon()
         self.trayIcon.setContextMenu(self.trayIconMenu)
@@ -194,29 +274,36 @@ class RemainderMain(QWidget):
         rect = screen.geometry()
         self.setGeometry(rect.center().x()-150,rect.center().y()-150, 300, 300)
         self.setWindowTitle('护眼助手')  
-        #全屏显示时间
-        log("prepare show time")
-        self.showtime = ShowTime()
-        # self.showtime.show()
-        #设置对话框
-        self.setting = Set(self)
-        if Config.config["set"]["fsshowtime"]:
-            self.fstimeAction.setText("关闭全屏显示时间")
-            self.showtime.start()
-        # self.lastrestingtime = QTime.currentTime()
-        self.lastrestingtime = QTime(0,0)
-        log("lastrestingtime0:"+str(self.lastrestingtime))
-        if not Config.config["set"]["minimize"]:
-            self.show()
-        self.start()
-        self.schedule = schedule.Schedule(self)
-        self.schedule.start()
-        self.sendfile = sendfile.SendFile(self)
-        self.sendfile.start()
-        self.setAcceptDrops(True)
-        self.th = threading.Thread(target=self.acceptThread)
-        self.th.start()
-    
+        
+    def onMouseEvent(self,event):
+        # 监听鼠标事件
+        self.lastActiveTime = time.time()
+        # print('Time:',event.Time)
+        # print ("MessageName:", event.MessageName)
+        # print ("WindowName:", event.WindowName)
+        # print ("Position:", event.Position)
+        return True
+
+    def onKeyboardEvent(self,event):
+        self.lastActiveTime = time.time()
+        # print('Time:',event.Time)
+        # print ("MessageName:", event.MessageName)
+        # print ("WindowName:", event.WindowName)
+        # print ("Ascii:", event.Ascii, chr(event.Ascii))
+        # print ("Key:", event.Key)
+        # print ("ScanCode:", event.ScanCode)
+        # print ("Alt", event.Alt)
+        return True
+
+    def check_idle(self):
+        # log(f'time.time()-self.lastActiveTime:{time.time()-self.lastActiveTime}')
+        if time.time()-self.lastActiveTime > IDLE_TIME:
+            return True
+        else:
+            if self.idle_store_flag is not None:
+                log("check not idle and has store,rest")
+                self.ontimer(self.idle_store_flag)
+                
     def showWin(self,action):
         log("action:"+str(action))
         if action == QSystemTrayIcon.Trigger or action == QSystemTrayIcon.DoubleClick:
@@ -246,35 +333,7 @@ class RemainderMain(QWidget):
 
     #启动
     def start(self):
-        log("startting....")
-        #先初始化各种
-        self.resting = False
-        self.store_flag = None
-        self.rest_count = 0        
-        self.passed_time = 0
-        ##休息窗口
-        self.transwin = TransWin()
-        self.rollwin = RollPic(self)
-        ##休息间隔计时器
-        self.shorttimer = mytimer.mytimer("pop")
-        # self.longtimer = mytimer.mytimer("roll")
-        self.shorttimer.timeout.connect(self.ontimer)
-        ##更新倒计时
-        self.update_countdown_timer = QTimer()
-        self.update_countdown_timer.timeout.connect(self.update_countdown)
-        self.tips_timer = QTimer()
-        self.tips_timer.timeout.connect(self.update_tooltips)
-        ##退出全屏时休息，每30秒检查一次
-        self.checkfulltimer = QTimer()
-        self.checkfulltimer.timeout.connect(self.real_check_fullscreen)
-        #检查配置是否正确
-        if not self.check_config():
-            self.show()
-            return    
-        self.startbtn.setText("暂停")
-        self.save_config()
-        self.get_shorttimeout()
-        self.start_timers(self.shorttimeout)
+        pass
 
     def start_pause(self):
         if self.startbtn.text() == "继续":
@@ -297,10 +356,7 @@ class RemainderMain(QWidget):
             self.longRest.setDisabled(False)
             # self.startbtn.setDisabled(False)
             # self.stopbtn.setDisabled(True)
-            self.shorttimer.stop()
-            # self.longtimer.stop()
-            self.update_countdown_timer.stop()
-            self.checkfulltimer.stop()
+            self.stop_timers()
             
     #检查配置是否正确
     def check_config(self):
@@ -362,13 +418,24 @@ class RemainderMain(QWidget):
         self.shortRest.setDisabled(True)
         self.longRest.setDisabled(True)        
         #更新倒计时
-        self.update_countdown_timer.start(300)
+        self.update_countdown_timer.start(COUNTDOWN_TIME)
         #更新tooltips
-        self.tips_timer.start(60000)    
+        self.tips_timer.start(TOOLTIPS_TIME)    
         self.update_tooltips() #更新一次    
         #退出全屏时休息，每30秒检查一次
         if "set" not in config.keys() or config["set"]["afterfullscreen"] == True: 
-            self.checkfulltimer.start(30000)
+            self.checkfulltimer.start(FULLSCREEN_CHECK_TIME)
+        #退出空闲状态时休息，每60秒检查一次
+        if "set" not in config.keys() or config["set"]["afteridle"] == True: 
+            self.check_idle_timer.start(IDLE_CHECK_TIME)
+            
+    def stop_timers(self):
+        self.shorttimer.stop()
+        # self.longtimer.stop()
+        self.update_countdown_timer.stop()
+        self.checkfulltimer.stop()
+        self.check_idle_timer.stop()
+
 
 
     def showSet(self):
@@ -386,7 +453,7 @@ class RemainderMain(QWidget):
         self.sendfile.show()
         
     def ontimer(self,flag=None):
-        log("in ontimer")
+        log("in ontimer-------------------------------")
         #同时只有一个休息
         if self.resting == True:
             return
@@ -418,13 +485,22 @@ class RemainderMain(QWidget):
         if config[self.flag]["restset"]["beforesound"]:
             self.play_music(config[self.flag]["restset"]["beforesoundpath"],False,config[self.flag]["restset"]["beforesoundvol"])
         #全屏不休息
-        if self.check_fullscreen():
-            if "set" not in config.keys() or config["set"]["fullscreen"] == True:
+        if "set" not in config.keys() or config["set"]["fullscreen"] == True:
+            if self.check_fullscreen():
                 log("full screen,not rest")
                 if self.store_flag != "long":
                     self.store_flag = self.flag
+                # log(f'store_flag:{self.store_flag}')
                 return
-                
+        #空闲不休息
+        if "set" not in config.keys() or config["set"]["idle"] == True:
+            if time.time()-self.lastActiveTime > IDLE_TIME:
+                log("idle,not rest")
+                if self.idle_store_flag != "long":
+                    self.idle_store_flag = self.flag
+                return
+        self.store_flag = None
+        self.idle_store_flag = None
         #停止计时
         # if timer == self.shorttimer:   
         if self.flag == "short":
@@ -432,7 +508,7 @@ class RemainderMain(QWidget):
             short_min = self.shortMin2.text() if self.shortMin2.text() != "" else "0" 
             short_sec = self.shortSec2.text() if self.shortSec2.text() != "" else "0" 
             rest_time = (int(short_hour)*3600+int(short_min)*60+int(short_sec))*1000
-            log(rest_time)
+            log(f'rest_time:{rest_time}ms')
             # self.restingtimer = self.shorttimer
         # elif timer == self.longtimer:       
         elif self.flag == "long":
@@ -446,27 +522,23 @@ class RemainderMain(QWidget):
         self.resting = True
         self.restingtimer.stop()
         #截屏
-        self.screen = QGuiApplication.primaryScreen()
         self.filename = os.getenv("temp")+"\\screen.jpg"
-        log(self.filename)
+        log(f'screenshot path:{self.filename}')
+        self.screen = QGuiApplication.primaryScreen()
         self.screen.grabWindow(0).save(self.filename,"jpg")
         time.sleep(1)
         #播放声音
         if config[self.flag]["restset"]["insound"]:
-            log("play insound")
-            # if os.path.splitext(config[self.flag]["restset"]["insoundpath"])[-1] in [".mp3",".wav",".wma",".flac"]:
-                # log("prefix")
+            log("play resting music...")
             self.play_music(config[self.flag]["restset"]["insoundpath"],True,config[self.flag]["restset"]["insoundvol"]) 
         #启动终止休息计时器
         self.rest_timer = QTimer()        
         self.rest_timer.setSingleShot(True)
         self.rest_timer.start(rest_time)        
         #展示界面        
-        # if self.restingtimer.args == "pop":
         if config[self.flag]["restset"]["ui"] == "pop":   
             self.rest_timer.timeout.connect(self.recover_pop)
             self.lockScreen(rest_time)
-        # elif self.restingtimer.args == "roll":
         elif config[self.flag]["restset"]["ui"] == "roll":   
             self.rest_timer.timeout.connect(self.recover_roll)
             self.rollPic(rest_time)
@@ -511,7 +583,8 @@ class RemainderMain(QWidget):
         self.update_roll_cd_timer.start(20000)
     #播放音乐
     def play_music(self,music,loop = True,volume = 20):
-        self.player =QMediaPlayer()
+        self.player = QMediaPlayer()
+        self.player.currentMediaChanged.connect(self.mediaChange)
         log("music："+music)
         self.playlist = QMediaPlaylist()
         if loop:
@@ -527,16 +600,19 @@ class RemainderMain(QWidget):
                     filelist.append(music+"\\"+i)
             while len(filelist)>0:
                 file = filelist.pop(random.randint(0,len(filelist)-1))
-                log("add music："+file)
+                # log("add music："+file)
                 self.playlist.addMedia(QMediaContent(QUrl.fromLocalFile(file)))
         self.player.setPlaylist(self.playlist)
         log("volume:"+str(volume))
         self.player.setVolume(volume)
         if loop:
+            log("playing music...")
             self.player.play()
         else:
             self.player.play()
             time.sleep(2)
+    def mediaChange(self,media):
+        log(f"current media:{media.request().url().fileName()}")
             
     #休息结束
     def recover_pop(self):
@@ -547,7 +623,8 @@ class RemainderMain(QWidget):
         self.player.stop()
         self.transwin.hide()
         self.restingtimer.start(self.shorttimeout)
-        log("end")
+        self.update_tooltips() #更新一次    
+        log("rest end")
     def recover_roll(self,timer = None):
         self.resting = False
         # self.roll_timer.stop()
@@ -558,7 +635,8 @@ class RemainderMain(QWidget):
             timer.start(self.shorttimeout)
         else:
             self.restingtimer.start(self.shorttimeout)
-        log("end")
+        self.update_tooltips() #更新一次    
+        log("rest end")
     #休息设置
     def showRestSetShort(self):
         self.restset = RestSet(self,"short")
@@ -600,13 +678,15 @@ class RemainderMain(QWidget):
         # cd = self.pop_timer.remainingTime()
         cd = self.rest_timer.remainingTime()
         self.popup.setText("正在休息中。。。(还剩"+str(cd//1000)+"秒)")
+        #self.popup.setWindowFlags(Qt.WindowStaysOnTopHint|Qt.WindowMaximizeButtonHint | Qt.MSWindowsFixedSizeDialogHint)
 
     def update_roll_cd(self):
         # cd = self.roll_timer.remainingTime()
         cd = self.rest_timer.remainingTime()
         if cd >= 0:
             self.rollwin.setCDText("还剩"+str(cd//1000)+"秒,按Ctrl+X退出")
-        self.rollwin.update()
+        self.rollwin.update() #引起paintevent，更新图片
+        #self.rollwin.setWindowFlags(Qt.FramelessWindowHint|Qt.WindowStaysOnTopHint)
     #检查全屏
     def check_fullscreen(self):
         fg_win = win32gui.GetForegroundWindow()
@@ -618,12 +698,18 @@ class RemainderMain(QWidget):
             return False
         rect = win32gui.GetWindowRect(fg_win)
         # log(rect)
-        screen = QGuiApplication.primaryScreen()
-        rect2 = screen.geometry()
+        screen = QGuiApplication.primaryScreen().geometry()
+        # log(screen)
+        fgwin_width = rect[2]-rect[0]
+        fgwin_height = rect[3]-rect[1]
+        # log(f'({fgwin_width} ,{fgwin_height})--({screen.width()},{screen.height()})')
+        
+        # screen = QGuiApplication.primaryScreen()
+        # rect2 = screen.geometry()
         # log(rect2)
         # log(f'{rect[2]},{rect2.width()},{rect[3]},{rect2.height()}')
-        
-        if rect[2] == rect2.width() and rect[3] == rect2.height():
+        # if rect[2] == rect2.width() and rect[3] == rect2.height():
+        if fgwin_width == screen.width() and fgwin_height == screen.height():        
             return True
         else:
             return False
@@ -631,9 +717,10 @@ class RemainderMain(QWidget):
     def real_check_fullscreen(self):
         if self.check_fullscreen():
             return
+        # log(f'store_flag:{self.store_flag}')
         if self.store_flag is not None:
+            log("check not fullscreen and has store,rest")
             self.ontimer(self.store_flag)
-            self.store_flag = None
         
             
     #保存配置
@@ -661,6 +748,8 @@ class RemainderMain(QWidget):
         # with open(configfile,"w") as f:
         #     f.write(json.dumps(config,indent=4))
     def quitapp(self):
+        self.hm.UnhookMouse()
+        self.hm.UnhookKeyboard()
         log(config)
         self.save_config()
         self.game_rest = False
@@ -695,13 +784,13 @@ class RemainderMain(QWidget):
             except socket.timeout as e:
                 # print(e)
                 # print("reminder accept check stop..")
-                if self.game_rest == False:
+                if self.game_rest == False: #退出线程
                     break
                 else:
                     continue
-            
-            print(c)
-            print(addr)
+            log(f'rest request from {addr}')
+            # print(c)
+            # print(addr)
             self.restnow.emit()
 
 
@@ -920,6 +1009,10 @@ class Set(QWidget):
         self.fullscreen.stateChanged.connect(self.setfsrest)
         self.afterfs = QCheckBox("退出全屏后立即休息")
         self.afterfs.stateChanged.connect(self.setafterfs)
+        self.idle = QCheckBox("空闲时不休息（空闲指10分钟无动作）")
+        self.idle.stateChanged.connect(self.setidlerest)
+        self.afteridle = QCheckBox("退出空闲状态后立即休息")
+        self.afteridle.stateChanged.connect(self.setafteridle)
         self.allowskip = QCheckBox("允许跳过休息")
         self.allowskip.stateChanged.connect(self.setAllowskip)
         self.fsshowtime = QCheckBox("全屏程序显示时间")
@@ -929,6 +1022,8 @@ class Set(QWidget):
             self.minimize.setChecked(True)
             self.fullscreen.setChecked(True)
             self.afterfs.setChecked(True)
+            self.idle.setChecked(True)
+            self.afteridle.setChecked(True)
             self.allowskip.setChecked(True)
             self.fsshowtime.setChecked(True)
         else:
@@ -938,6 +1033,8 @@ class Set(QWidget):
             self.minimize.setChecked(Config.config["set"]["minimize"])
             self.fullscreen.setChecked(Config.config["set"]["fullscreen"])
             self.afterfs.setChecked(Config.config["set"]["afterfullscreen"])
+            self.idle.setChecked(Config.config["set"]["idle"])
+            self.afteridle.setChecked(Config.config["set"]["afteridle"])
             if "allowskip" not in Config.config["set"]:
                 Config.config["set"]["allowskip"] = True
             self.allowskip.setChecked(Config.config["set"]["allowskip"])
@@ -957,6 +1054,15 @@ class Set(QWidget):
         hbox.addWidget(label)
         hbox.addWidget(self.afterfs)
         vbox.addLayout(hbox)
+        
+        vbox.addWidget(self.idle)
+        hbox2 = QHBoxLayout()
+        label2 = QLabel(" ")
+        label2.setMaximumWidth(10)
+        hbox2.addWidget(label2)
+        hbox2.addWidget(self.afteridle)
+        vbox.addLayout(hbox2)
+        
         vbox.addWidget(self.allowskip)
         vbox.addWidget(self.fsshowtime)
         self.setLayout(vbox)
@@ -986,16 +1092,40 @@ class Set(QWidget):
         elif state == Qt.Unchecked:
             Config.config["set"]["fullscreen"] = False
             Config.config["set"]["afterfullscreen"] = False
+            self.par.checkfulltimer.stop()
             self.afterfs.setChecked(False)
             
     def setafterfs(self,state):
         if state == Qt.Checked:
             Config.config["set"]["fullscreen"] = True
             Config.config["set"]["afterfullscreen"] = True
+            self.par.checkfulltimer.start(FULLSCREEN_CHECK_TIME)
             self.fullscreen.setChecked(True)
         elif state == Qt.Unchecked:
             Config.config["set"]["afterfullscreen"] = False
+            self.par.checkfulltimer.stop()
             self.afterfs.setChecked(False)
+            
+    def setidlerest(self,state):
+        if state == Qt.Checked:
+            Config.config["set"]["idle"] = True
+        elif state == Qt.Unchecked:
+            Config.config["set"]["idle"] = False
+            Config.config["set"]["afteridle"] = False
+            self.par.check_idle_timer.stop()
+            self.afteridle.setChecked(False)
+            
+    def setafteridle(self,state):
+        if state == Qt.Checked:
+            Config.config["set"]["idle"] = True
+            Config.config["set"]["afteridle"] = True
+            self.par.check_idle_timer.start(IDLE_CHECK_TIME)
+            self.idle.setChecked(True)
+        elif state == Qt.Unchecked:
+            Config.config["set"]["afteridle"] = False
+            self.par.check_idle_timer.stop()
+            self.afteridle.setChecked(False)
+            
     def setAllowskip(self,state):
         if state == Qt.Checked:
             Config.config["set"]["allowskip"] = True
@@ -1028,9 +1158,7 @@ class TransWin(QWidget):
 
     def paintEvent(self,e):
         painter = QPainter(self)
-        log("paintevent")
-        # self.screen.grabWindow(0).save(self.filename,"jpg")
-        # time.sleep(1)
+        # log("paintevent")
         painter.drawPixmap(self.rect,QPixmap(self.filename))
 
 #轮播图片窗口
@@ -1052,14 +1180,12 @@ class RollPic(QWidget):
 
     def paintEvent(self,e):
         painter = QPainter(self)
-        log("paintevent")
+        # log("paintevent")
         if len(self.filelist) == 0:
             path = os.getenv("temp")+"\\screen.jpg"
-            # screen = QGuiApplication.primaryScreen()
-            # screen.grabWindow(0).save(path,"jpg")  
         else:  
             path = self.filelist[random.randint(0,len(self.filelist)-1)]
-        log(path)
+        # log(path)
         sec = str(random.randint(0,1000))
         painter.drawPixmap(self.rect,QPixmap(path))
 
@@ -1071,6 +1197,7 @@ class RollPic(QWidget):
         self.filelist = []
         tmplist = []
         picdir = config[flag]["restset"]["uipic"]
+        log(f'picture dir:{picdir}')
         tmplist = os.listdir(picdir)  
         for file in tmplist:
             path = os.path.join(picdir, file)
@@ -1081,7 +1208,6 @@ class RollPic(QWidget):
 
     def recover(self):
         if Config.config["set"]["allowskip"]:
-            self.par.lastrestingtime = QTime(0,0) #跳过不算休息
             self.par.recover_roll(self.timer)
 
 class ShowTime(QWidget):
@@ -1125,6 +1251,7 @@ class ShowTime(QWidget):
         # self.chkfstimer.start()
         self.showstate = False
         self.setGeometry(self.rect.right()-55,self.rect.top(),40,40)
+        self.setWindowTitle("showtime")
 
     # def setmyFont(self):
         # font = QFontDialog.getFont(self.cdlabel.font())
@@ -1152,28 +1279,37 @@ class ShowTime(QWidget):
         # log(self.fg_win)
         title = win32gui.GetWindowText(self.fg_win)
         # log(title)
-        if title == "":
+        if title == "" or title == "iTop Easy Desktop": #桌面分组软件
             # log("desktop")
+            if not self.isHidden():
+                log("desktop,hide time")
+                self.hide()
             return False
         rect = win32gui.GetWindowRect(self.fg_win)
         # log(rect)
-        screen = QGuiApplication.primaryScreen()
-        rect2 = screen.geometry()
-        # log(rect2)
-        # log(f'{rect[2]} ,{rect2.width()},{rect[3]},{rect2.height()}')
-        if rect[2] == rect2.width() and rect[3] == rect2.height():
+        screen = QGuiApplication.primaryScreen().geometry()
+        # log(screen)
+        fgwin_width = rect[2]-rect[0]
+        fgwin_height = rect[3]-rect[1]
+        # log(f'({fgwin_width} ,{fgwin_height})--({screen.width()},{screen.height()})')
+        if fgwin_width == screen.width() and fgwin_height == screen.height():
             # log("full screen")
-            if not self.showstate:
+            if self.isHidden():
                 self.show()
+                # log("show time")
                 win32gui.SetForegroundWindow(self.fg_win)
-                self.showstate = True
-            # self.hide()
+                # if not self.isHidden(): #无效
+                    # hd = win32gui.FindWindow("Qt5152QWindowIcon","showtime")
+                    # print(hex(hd))
+                    # win32gui.SetForegroundWindow(hd)
         else:
             # log("not full screen")
-            if self.showstate:
+            if not self.isHidden():
                 self.hide()
-                self.showstate = False
-            # self.show()
+                # log("hide time")
+            # if self.isHidden():
+                # self.show()
+                
         
     def mousePressEvent(self,event):
         if event.button() == Qt.LeftButton:

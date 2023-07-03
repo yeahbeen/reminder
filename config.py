@@ -62,6 +62,8 @@ class Config(object):
             Config.config["set"]["minimize"] = True
             Config.config["set"]["fullscreen"] = True
             Config.config["set"]["afterfullscreen"] = True
+            Config.config["set"]["idle"] = True
+            Config.config["set"]["afteridle"] = True
             Config.config["set"]["allowskip"] = True
             Config.config["set"]["fsshowtime"] = True
             Config.config["schedule"] = []
@@ -71,8 +73,9 @@ class Config(object):
     @classmethod
     def save(cls):
         with open(Config.configfile,"w") as f:
-            log("crash here?")
-            f.write(json.dumps(Config.config,indent=4))
-            log("crash here2?")
+            # log("crash here?")
+            # f.write(json.dumps(Config.config,indent=4))
+            f.write(json.dumps(Config.config))
+            # log("crash here2?")
         os.system(f'copy {Config.configfile} {Config.configfile}.bak')
-        log("crash here3?")
+        # log("crash here3?")
