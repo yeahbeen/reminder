@@ -6,7 +6,8 @@ import json
 import win32gui
 import socket
 import threading
-import PyHook3 as pyHook
+# import PyHook3 as pyHook
+import pyWinhook as pyHook
 # from PyQt5.QtWidgets import *
 from PyQt5.QtWidgets import QWidget,QGroupBox,QHBoxLayout,QVBoxLayout,QLineEdit,QLabel,QPushButton,QRadioButton,QCheckBox,QApplication,QAction,QMenu,QSystemTrayIcon,QShortcut,QSlider,QFileDialog,QMessageBox
 from PyQt5.QtGui import QIcon,QKeySequence,QPixmap,QGuiApplication,QPainter,QColor,QTextCharFormat,QBrush,QTextCursor,QFont
