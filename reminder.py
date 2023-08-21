@@ -1074,7 +1074,8 @@ class Set(QWidget):
         settings = QSettings("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run",QSettings.NativeFormat)
         if state == Qt.Checked:
             Config.config["set"]["autorun"] = True
-            settings.setValue(os.path.splitext(os.path.basename(sys.argv[0]))[0], os.path.abspath(sys.argv[0]))
+            log(f'{os.path.splitext(os.path.basename(sys.argv[0]))[0]}, {os.path.abspath(sys.argv[0])}')
+            settings.setValue(os.path.splitext(os.path.basename(sys.argv[0]))[0],f'python {os.path.abspath(sys.argv[0])}')
             # settings.setValue(os.path.splitext(os.path.basename(__file__))[0], os.path.abspath(__file__))
         elif state == Qt.Unchecked:
             Config.config["set"]["autorun"] = False
