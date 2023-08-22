@@ -1,3 +1,2 @@
 REM echo %~dp0
-pythonw %~dp0reminder.py
-pause
+start pythonw %~dp0reminder.py
