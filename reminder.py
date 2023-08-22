@@ -1004,6 +1004,8 @@ class Set(QWidget):
         self.setGeometry(rect.x()+50,rect.y()+50,200,100)
         self.autorun = QCheckBox("开机启动")
         self.autorun.stateChanged.connect(self.setAutorun)
+        self.nocmd = QCheckBox("开机启动后不显示命令行窗口")
+        self.nocmd.stateChanged.connect(self.setNocmd)
         self.minimize = QCheckBox("启动后最小化")
         self.minimize.stateChanged.connect(self.setMinimize)
         self.fullscreen = QCheckBox("全屏时不休息只提醒")
@@ -1019,34 +1021,48 @@ class Set(QWidget):
         self.fsshowtime = QCheckBox("全屏程序显示时间")
         if "set" not in Config.config.keys():
             Config.config["set"] = {}
-            self.autorun.setChecked(True)
-            self.minimize.setChecked(True)
-            self.fullscreen.setChecked(True)
-            self.afterfs.setChecked(True)
-            self.idle.setChecked(True)
-            self.afteridle.setChecked(True)
-            self.allowskip.setChecked(True)
-            self.fsshowtime.setChecked(True)
-        else:
-            self.autorun.setChecked(Config.config["set"]["autorun"])
-            if "minimize" not in Config.config["set"]:
-                Config.config["set"]["minimize"] = True
-            self.minimize.setChecked(Config.config["set"]["minimize"])
-            self.fullscreen.setChecked(Config.config["set"]["fullscreen"])
-            self.afterfs.setChecked(Config.config["set"]["afterfullscreen"])
-            self.idle.setChecked(Config.config["set"]["idle"])
-            self.afteridle.setChecked(Config.config["set"]["afteridle"])
-            if "allowskip" not in Config.config["set"]:
-                Config.config["set"]["allowskip"] = True
-            self.allowskip.setChecked(Config.config["set"]["allowskip"])
-            if "fsshowtime" not in Config.config["set"]:
-                Config.config["set"]["fsshowtime"] = True
-            self.fsshowtime.setChecked(Config.config["set"]["fsshowtime"])
+            # self.autorun.setChecked(True)
+            # self.minimize.setChecked(True)
+            # self.fullscreen.setChecked(True)
+            # self.afterfs.setChecked(True)
+            # self.idle.setChecked(True)
+            # self.afteridle.setChecked(True)
+            # self.allowskip.setChecked(True)
+            # self.fsshowtime.setChecked(True)
+        # else:
+        if "autorun" not in Config.config["set"]:
+            Config.config["set"]["autorun"] = True             
+        self.autorun.setChecked(Config.config["set"]["autorun"])
+        if "nocmd" not in Config.config["set"]:
+            Config.config["set"]["nocmd"] = False 
+        self.nocmd.setChecked(Config.config["set"]["nocmd"])
+        if "minimize" not in Config.config["set"]:
+            Config.config["set"]["minimize"] = True
+        self.minimize.setChecked(Config.config["set"]["minimize"])
+        if "fullscreen" not in Config.config["set"]:
+            Config.config["set"]["fullscreen"] = True            
+        self.fullscreen.setChecked(Config.config["set"]["fullscreen"])
+        if "afterfullscreen" not in Config.config["set"]:
+            Config.config["set"]["afterfullscreen"] = True              
+        self.afterfs.setChecked(Config.config["set"]["afterfullscreen"])
+        if "idle" not in Config.config["set"]:
+            Config.config["set"]["idle"] = True              
+        self.idle.setChecked(Config.config["set"]["idle"])
+        if "afteridle" not in Config.config["set"]:
+            Config.config["set"]["afteridle"] = True              
+        self.afteridle.setChecked(Config.config["set"]["afteridle"])
+        if "allowskip" not in Config.config["set"]:
+            Config.config["set"]["allowskip"] = True
+        self.allowskip.setChecked(Config.config["set"]["allowskip"])
+        if "fsshowtime" not in Config.config["set"]:
+            Config.config["set"]["fsshowtime"] = True
+        self.fsshowtime.setChecked(Config.config["set"]["fsshowtime"])
             
         self.fsshowtime.stateChanged.connect(self.setFsshowtime) #放后面，防止自动触发
             
         vbox = QVBoxLayout()
         vbox.addWidget(self.autorun)
+        vbox.addWidget(self.nocmd)
         vbox.addWidget(self.minimize)
         vbox.addWidget(self.fullscreen)
         hbox = QHBoxLayout()
@@ -1074,13 +1090,25 @@ class Set(QWidget):
         settings = QSettings("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run",QSettings.NativeFormat)
         if state == Qt.Checked:
             Config.config["set"]["autorun"] = True
-            log(f'{os.path.splitext(os.path.basename(sys.argv[0]))[0]}, {os.path.abspath(sys.argv[0])}')
-            settings.setValue(os.path.splitext(os.path.basename(sys.argv[0]))[0],f'python {os.path.abspath(sys.argv[0])}')
+            if "nocmd" in Config.config["set"].keys() and Config.config["set"]["nocmd"]:
+                path = os.path.dirname(os.path.abspath(sys.argv[0]))+"\\reminderw.bat"
+            else:
+                path = os.path.dirname(os.path.abspath(sys.argv[0]))+"\\reminder.bat"
+            log(f'{os.path.splitext(os.path.basename(sys.argv[0]))[0]}, {path}')
+            settings.setValue(os.path.splitext(os.path.basename(sys.argv[0]))[0],path)
             # settings.setValue(os.path.splitext(os.path.basename(__file__))[0], os.path.abspath(__file__))
         elif state == Qt.Unchecked:
             Config.config["set"]["autorun"] = False
             settings.remove(os.path.splitext(os.path.basename(sys.argv[0]))[0])
             # settings.remove(os.path.splitext(os.path.basename(__file__))[0])
+
+    def setNocmd(self,state):
+        if state == Qt.Checked:
+            Config.config["set"]["nocmd"] = True
+        elif state == Qt.Unchecked:
+            Config.config["set"]["nocmd"] = False  
+        if Config.config["set"]["autorun"]:
+            self.setAutorun(Qt.Checked)        
 
     def setMinimize(self,state):
         if state == Qt.Checked:
